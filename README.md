@@ -10,6 +10,8 @@ Flow: **Identify, Assess, Match, Route, Alert, Prepare, Arrive.**
 
 ## Setup
 
+Full commands (push to GitHub, fresh WSL setup, demo, tunnel, troubleshooting): [docs/SETUP.md](docs/SETUP.md).
+
 Requires Node.js 20+.
 
 ```
