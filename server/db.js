@@ -40,6 +40,14 @@ CREATE TABLE IF NOT EXISTS alerts (
 CREATE TABLE IF NOT EXISTS auth_sessions (
   token_hash TEXT PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id), expires_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS notifications (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL REFERENCES users(id), kind TEXT, title TEXT NOT NULL,
+  body TEXT, link TEXT, session_id INTEGER, created_at TEXT DEFAULT CURRENT_TIMESTAMP, read_at TEXT
+);
+CREATE TABLE IF NOT EXISTS outbox (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, session_id INTEGER, to_name TEXT, to_phone TEXT, channel TEXT DEFAULT 'sms',
+  body TEXT NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
 CREATE TABLE IF NOT EXISTS session_events (
   id INTEGER PRIMARY KEY AUTOINCREMENT, session_id INTEGER NOT NULL,
   step TEXT NOT NULL, at TEXT DEFAULT CURRENT_TIMESTAMP
@@ -61,6 +69,13 @@ function migrate(d) {
   ensureColumn(d, 'guardians', 'email', 'TEXT');
   ensureColumn(d, 'alerts', 'status', "TEXT DEFAULT 'new'");
   ensureColumn(d, 'emergency_sessions', 'access_key', 'TEXT');
+  ensureColumn(d, 'alerts', 'ack_at', 'TEXT');
+  ensureColumn(d, 'alerts', 'ack_note', 'TEXT');
+  ensureColumn(d, 'alerts', 'decline_reason', 'TEXT');
+  ensureColumn(d, 'emergency_sessions', 'cancelled_at', 'TEXT');
+  ensureColumn(d, 'emergency_sessions', 'bystander_name', 'TEXT');
+  ensureColumn(d, 'emergency_sessions', 'bystander_phone', 'TEXT');
+  ensureColumn(d, 'session_events', 'actor', "TEXT DEFAULT 'System'");
   d.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email)');
 }
 
@@ -81,8 +96,9 @@ function getDb() {
   return db;
 }
 
-function logEvent(sessionId, step) {
-  getDb().prepare('INSERT INTO session_events (session_id, step) VALUES (?, ?)').run(sessionId, step);
+// actor: who did it (Bystander, Hospital staff, Guardian, Patient, System), shown in every timeline.
+function logEvent(sessionId, step, actor = 'System') {
+  getDb().prepare('INSERT INTO session_events (session_id, step, actor) VALUES (?, ?, ?)').run(sessionId, step, actor);
 }
 
 const STATUS_ORDER = ['triggered', 'assessed', 'matched', 'alerted', 'arrived'];

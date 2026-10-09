@@ -30,6 +30,7 @@ app.get('/api/health', (req, res) => {
     ok: true,
     demo_center: demoCenter(),
     mock_mode: process.env.MOCK_MODE === 'true',
+    demo_mode: process.env.DEMO_MODE !== 'false',
     face_enabled: process.env.ENABLE_FACE === 'true',
   });
 });
@@ -38,6 +39,7 @@ app.use('/api', require('./routes/auth'));
 app.use('/api', require('./routes/me'));
 app.use('/api', require('./routes/guardian'));
 app.use('/api', require('./routes/hospital'));
+app.use('/api', require('./routes/notifications'));
 app.use('/api', require('./routes/emergency'));
 app.use('/api', require('./routes/identify'));
 app.use('/api', require('./routes/triage'));

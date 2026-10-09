@@ -13,7 +13,7 @@ router.post('/route', async (req, res, next) => {
     if (!h) return res.status(404).json({ message: 'Hospital not found' });
     const route = await getRoute({ lat: s.lat, lng: s.lng }, h);
     getDb().prepare('UPDATE emergency_sessions SET chosen_hospital_id=?, eta_min=? WHERE id=?').run(h.id, route.eta_min, s.id);
-    logEvent(s.id, `routed to ${h.name}`);
+    logEvent(s.id, `Route to ${h.name} planned: ${route.eta_min} min, ${route.distance_km} km`, 'System');
     res.json(route);
   } catch (e) { next(e); }
 });

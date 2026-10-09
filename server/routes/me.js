@@ -81,8 +81,17 @@ router.get('/me/sessions', (req, res, next) => {
         s.eta_min, s.created_at, s.closed_at, h.name AS hospital_name
       FROM emergency_sessions s LEFT JOIN hospitals h ON h.id = s.chosen_hospital_id
       WHERE s.patient_id = ? ORDER BY s.id DESC LIMIT 20`).all(req.user.id);
-    const ev = db.prepare('SELECT step, at FROM session_events WHERE session_id = ? ORDER BY id');
-    res.json({ sessions: rows.map((r) => ({ ...r, created_at: iso(r.created_at), closed_at: iso(r.closed_at), timeline: ev.all(r.id).map((e) => ({ step: e.step, at: iso(e.at) })) })) });
+    const ev = db.prepare('SELECT step, at, actor FROM session_events WHERE session_id = ? ORDER BY id');
+    res.json({ sessions: rows.map((r) => ({ ...r, created_at: iso(r.created_at), closed_at: iso(r.closed_at), timeline: ev.all(r.id).map((e) => ({ step: e.step, at: iso(e.at), actor: e.actor })) })) });
+  } catch (e) { next(e); }
+});
+
+// Who has looked at my emergency data, and when. Every lookup is logged.
+router.get('/me/access-log', (req, res, next) => {
+  try {
+    const rows = getDb().prepare(`SELECT e.session_id, e.step, e.at, e.actor FROM session_events e JOIN emergency_sessions s ON s.id = e.session_id
+      WHERE s.patient_id = ? AND (e.step LIKE 'Emergency ID looked up%' OR e.step LIKE '%identified the patient%') ORDER BY e.id DESC LIMIT 50`).all(req.user.id);
+    res.json({ entries: rows.map((r) => ({ ...r, at: iso(r.at) })) });
   } catch (e) { next(e); }
 });
 

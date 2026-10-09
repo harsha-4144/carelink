@@ -2,6 +2,7 @@ const express = require('express');
 const { getDb, logEvent, loadSession, badRequest, patientSummary } = require('../db');
 
 const router = express.Router();
+const LABEL = { id: 'CARELINK ID', qr: 'QR scan', face: 'face scan' };
 
 // Euclidean distance between two face descriptors (used only when ENABLE_FACE=true).
 function distance(a, b) {
@@ -39,17 +40,17 @@ router.post('/identify', (req, res, next) => {
     const session = loadSession(session_id);
 
     if (method === 'face' && process.env.ENABLE_FACE !== 'true') {
-      logEvent(session.id, 'identify (face): disabled');
+      logEvent(session.id, 'Face lookup attempted but face recognition is off', 'Bystander');
       return res.json({ found: false, reason: 'face_disabled' });
     }
     const patientId = findPatientId(method, value);
     const patient = patientId ? patientSummary(patientId) : null;
     if (!patient) {
-      logEvent(session.id, `identify (${method}): not found`);
+      logEvent(session.id, `Lookup by ${LABEL[method]} found no patient`, 'Bystander');
       return res.json({ found: false, reason: 'not_found' });
     }
     getDb().prepare('UPDATE emergency_sessions SET patient_id = ? WHERE id = ?').run(patient.id, session.id);
-    logEvent(session.id, `identify (${method}): found ${patient.carelink_id}`);
+    logEvent(session.id, `Emergency ID looked up via ${LABEL[method]}: ${patient.name} identified`, 'Bystander');
     res.json({ found: true, patient });
   } catch (e) { next(e); }
 });

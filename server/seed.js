@@ -27,7 +27,7 @@ function seed(db = getDb()) {
   const lat = parseFloat(process.env.DEMO_CENTER_LAT || '17.7231');
   const lng = parseFloat(process.env.DEMO_CENTER_LNG || '83.3013');
   db.transaction(() => {
-    for (const t of ['auth_sessions', 'session_events', 'alerts', 'emergency_sessions', 'guardians', 'patient_profiles', 'hospitals', 'users']) {
+    for (const t of ['notifications', 'outbox', 'auth_sessions', 'session_events', 'alerts', 'emergency_sessions', 'guardians', 'patient_profiles', 'hospitals', 'users']) {
       db.exec(`DELETE FROM ${t}`);
     }
     db.exec("DELETE FROM sqlite_sequence");

@@ -20,7 +20,7 @@ router.get('/hospitals/match', async (req, res, next) => {
       urgency_level: s.urgency_level, needed_specialty: s.needed_specialty,
     });
     advanceStatus(s.id, 'matched');
-    logEvent(s.id, 'matched');
+    logEvent(s.id, `Top hospitals ranked (best: ${hospitals[0] ? hospitals[0].name : 'none'})`, 'System');
     res.json({ urgency_level: s.urgency_level, hospitals });
   } catch (e) { next(e); }
 });
