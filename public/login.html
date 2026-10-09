@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CARELINK AI: Log in</title>
+<link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="/">CARELINK<span>AI</span></a>
+  <nav id="nav" class="nav" aria-label="Account"></nav>
+  <span class="amb">Ambulance: 108</span>
+  <a class="call" href="tel:112">Call 112</a>
+</header>
+<noscript><div class="banner">CARELINK needs JavaScript. If this is an emergency, call 112.</div></noscript>
+<div id="error-banner" class="banner" role="alert" hidden></div>
+<main class="narrow">
+  <div class="panel" style="margin-top:1.5rem">
+    <h1>Welcome back</h1>
+    <p class="muted">Log in as a patient, guardian or hospital staff member.</p>
+    <form id="login-form" novalidate>
+      <label for="email">Email</label>
+      <input id="email" type="email" autocomplete="email" required>
+      <label for="password">Password</label>
+      <input id="password" type="password" autocomplete="current-password" required>
+      <p id="login-msg" class="note" role="alert" style="color:var(--red-dark)"></p>
+      <div class="row"><button type="submit" id="login-btn" class="primary" style="width:100%">Log in</button></div>
+    </form>
+    <p class="note" style="margin-top:1rem">New here? <a href="/register.html">Register as a patient</a> · <a href="/signup.html?role=guardian">Guardian</a> · <a href="/signup.html?role=hospital_staff">Hospital staff</a></p>
+  </div>
+  <div class="panel" style="margin-top:1rem">
+    <h3>Demo accounts</h3>
+    <p class="note">Tap one to log in (password <code>demo1234</code>). Synthetic data.</p>
+    <div class="row" style="margin-top:.4rem">
+      <button type="button" class="secondary small demo" data-email="asha@demo.test">Patient: Asha</button>
+      <button type="button" class="secondary small demo" data-email="rohan@demo.test">Guardian: Rohan</button>
+      <button type="button" class="secondary small demo" data-email="kiran@demo.test">Heartline staff</button>
+      <button type="button" class="secondary small demo" data-email="priya@demo.test">Riverside staff</button>
+    </div>
+  </div>
+</main>
+
+<script src="/js/api.js"></script>
+<script src="/js/nav.js"></script>
+<script>
+function safeNext() {
+  const n = new URLSearchParams(location.search).get('next');
+  return n && n.startsWith('/') && !n.startsWith('//') ? n : null;
+}
+
+async function doLogin(email, password) {
+  $('login-msg').textContent = '';
+  $('login-btn').disabled = true;
+  try {
+    const r = await api('POST', '/api/auth/login', { email, password }, { quiet: true });
+    location.href = safeNext() || HOME_BY_ROLE[r.user.role];
+  } catch (e) {
+    $('login-msg').textContent = e.message;
+    $('login-btn').disabled = false;
+  }
+}
+
+$('login-form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const email = $('email').value.trim();
+  if (!email || !$('password').value) { $('login-msg').textContent = 'Enter your email and password.'; return; }
+  doLogin(email, $('password').value);
+});
+
+document.querySelectorAll('.demo').forEach((b) => b.addEventListener('click', () => doLogin(b.dataset.email, 'demo1234')));
+loadUser().then((u) => { if (u) location.replace(HOME_BY_ROLE[u.role]); });
+</script>
+</body>
+</html>

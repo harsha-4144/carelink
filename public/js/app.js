@@ -1,5 +1,5 @@
 // Bystander wizard. State lives in `state`; each step is a <section id="step-NAME">.
-const state = { sessionId: null, lat: null, lng: null, patient: null, triage: null, hospitals: [], hospital: null, route: null };
+const state = { sessionId: null, key: null, lat: null, lng: null, patient: null, triage: null, hospitals: [], hospital: null, route: null };
 
 const STEP_PROGRESS = { start: null, identify: 'identify', assess: 'assess', match: 'match', route: 'route', alert: 'alert', arrive: 'arrive' };
 const PROGRESS_ORDER = ['identify', 'assess', 'match', 'route', 'alert', 'prepare', 'arrive'];
@@ -45,7 +45,7 @@ async function startEmergency(triggeredBy) {
   }
   try {
     const r = await api('POST', '/api/emergency', Object.assign({ triggered_by: triggeredBy }, pos || {}));
-    Object.assign(state, { sessionId: r.session_id, lat: r.lat, lng: r.lng });
+    Object.assign(state, { sessionId: r.session_id, key: r.access_key, lat: r.lat, lng: r.lng });
     Voice.stop();
     goStep('identify');
     if (state.faceEnabled) initFace();
@@ -60,12 +60,12 @@ if (Voice.supported) {
   const mic = $('mic-btn');
   mic.hidden = false;
   mic.addEventListener('click', () => {
-    if (Voice.active) { Voice.stop(); mic.classList.remove('listening'); mic.textContent = '🎤 Say "emergency"'; return; }
+    if (Voice.active) { Voice.stop(); mic.classList.remove('listening'); mic.textContent = 'Say "emergency"'; return; }
     Voice.listen(
       () => { mic.classList.remove('listening'); startEmergency('voice'); },
       (s, detail) => {
         mic.classList.toggle('listening', s === 'listening');
-        mic.textContent = s === 'listening' ? '🎤 Listening… say "emergency" or "help"' : '🎤 Say "emergency"';
+        mic.textContent = s === 'listening' ? 'Listening… say "emergency" or "help"' : 'Say "emergency"';
         if (s === 'error') $('start-status').textContent = 'Microphone unavailable (' + detail + '). Use the SOS button.';
       });
   });
@@ -161,7 +161,8 @@ async function loadMatches() {
   if (!state.hospitals.length) { $('hospital-list').innerHTML = '<p class="empty">No suitable hospital found nearby. Call 112.</p>'; return; }
   $('hospital-list').innerHTML = state.hospitals.map((h, i) => `
     <label class="card selectable" data-id="${h.id}">
-      <input type="radio" name="hospital" value="${h.id}" ${i === 0 ? '' : ''}>
+      ${i === 0 ? '<span class="rec">RECOMMENDED</span>' : ''}
+      <input type="radio" name="hospital" value="${h.id}">
       <h3>${esc(h.name)} <span class="score" title="Match score out of 100">${h.score}</span></h3>
       <div class="meta"><span>${esc(h.eta_min)} min</span><span>${esc(h.distance_km)} km</span><span class="note">simulated traffic</span></div>
       <ul>${h.reasons.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>
@@ -198,8 +199,8 @@ $('alert-btn').addEventListener('click', () => withBusy($('alert-btn'), async ()
   const r = await api('POST', '/api/alert', { session_id: state.sessionId, hospital_id: state.hospital.id });
   const guardians = r.alerts.filter((a) => a.target_type === 'guardian').length;
   $('alert-detail').textContent = `${state.hospital.name} and ${guardians} guardian(s) have been notified (in-app, simulated; no SMS is sent).`;
-  $('guardian-link').href = '/guardian.html?session=' + state.sessionId;
-  $('hospital-link').href = '/hospital.html?hospital=' + state.hospital.id;
+  $('guardian-link').href = `/guardian.html?session=${state.sessionId}&key=${state.key}`;
+  $('hospital-link').href = '/hospital.html';
   $('alert-success').hidden = false;
   $('alert-btn').hidden = true;
   $('to-arrive').hidden = false;
@@ -210,7 +211,7 @@ $('to-arrive').addEventListener('click', () => goStep('arrive'));
 
 // ---------- 7. Arrive ----------
 $('arrive-btn').addEventListener('click', () => withBusy($('arrive-btn'), async () => {
-  const s = await api('POST', `/api/sessions/${state.sessionId}/arrive`);
+  const s = await api('POST', `/api/sessions/${state.sessionId}/arrive`, { key: state.key });
   $('arrive-done').hidden = false;
   $('arrive-btn').hidden = true;
   $('timeline').innerHTML = '<h3>Timeline</h3>' + renderTimeline(s.timeline);

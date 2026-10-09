@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CARELINK AI: My dashboard</title>
+<link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="/">CARELINK<span>AI</span></a>
+  <nav id="nav" class="nav" aria-label="Account"></nav>
+  <span class="amb">Ambulance: 108</span>
+  <a class="call" href="tel:112">Call 112</a>
+</header>
+<noscript><div class="banner">CARELINK needs JavaScript. If this is an emergency, call 112.</div></noscript>
+<div id="error-banner" class="banner" role="alert" hidden></div>
+<main class="wide">
+  <div class="page-head"><div><h1 id="p-hello">My CARELINK</h1><p>Your emergency profile, guardians and history.</p></div></div>
+  <div class="seg" role="tablist" style="max-width:640px">
+    <button type="button" role="tab" data-tab="overview" aria-selected="true">Overview</button>
+    <button type="button" role="tab" data-tab="profile" aria-selected="false">Medical profile</button>
+    <button type="button" role="tab" data-tab="guardians" aria-selected="false">Guardians</button>
+    <button type="button" role="tab" data-tab="history" aria-selected="false">History</button>
+  </div>
+
+  <section id="pt-overview" class="tabpane">
+    <div class="grid two">
+      <div class="id-card qr-card">
+        <small>CARELINK EMERGENCY ID</small>
+        <div class="big" id="p-id">…</div>
+        <div id="p-name" style="margin-bottom:.6rem"></div>
+        <img id="p-qr" alt="Your emergency QR code" width="220" height="220" style="background:#fff;padding:8px">
+        <div class="row no-print" style="justify-content:center"><button type="button" id="p-print" class="secondary">Print ID card</button></div>
+      </div>
+      <div class="grid" style="align-content:start">
+        <div class="panel"><h3>What responders will see</h3><div id="p-summary"><div class="skeleton"></div><div class="skeleton"></div></div></div>
+        <div class="panel"><h3>Latest emergency</h3><div id="p-latest"><div class="skeleton"></div></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="pt-profile" class="tabpane" hidden>
+    <form id="profile-form" class="panel" novalidate>
+      <h2>Medical profile</h2>
+      <div class="field-row">
+        <div><label for="f-name">Full name</label><input id="f-name" type="text"></div>
+        <div><label for="f-phone">Phone</label><input id="f-phone" type="tel"></div>
+        <div><label for="f-blood">Blood group</label><select id="f-blood"><option value="">Unknown</option><option>A+</option><option>A-</option><option>B+</option><option>B-</option><option>AB+</option><option>AB-</option><option>O+</option><option>O-</option></select></div>
+        <div><label for="f-allergies">Allergies</label><input id="f-allergies" type="text"></div>
+        <div><label for="f-conditions">Conditions</label><input id="f-conditions" type="text"></div>
+        <div><label for="f-meds">Medications</label><input id="f-meds" type="text"></div>
+      </div>
+      <h3 style="margin-top:1.2rem">Consent</h3>
+      <label class="check"><input type="checkbox" id="f-c-medical" checked disabled> Store my medical summary for emergencies (required)</label>
+      <label class="check"><input type="checkbox" id="f-c-guardian"> Alert my guardians in an emergency</label>
+      <label class="check"><input type="checkbox" id="f-c-face"> Allow face recognition (only if enabled on the server)</label>
+      <div class="row"><button type="submit" id="f-save" class="primary">Save changes</button></div>
+    </form>
+  </section>
+
+  <section id="pt-guardians" class="tabpane" hidden>
+    <div class="grid two">
+      <div class="panel"><h2>Your guardians</h2><div id="g-list"><div class="skeleton"></div><div class="skeleton"></div></div></div>
+      <form id="guardian-form" class="panel" novalidate>
+        <h2>Add a guardian</h2>
+        <p class="note">If they sign up as a guardian with this email, they can follow your emergencies live.</p>
+        <label for="n-name">Name *</label><input id="n-name" type="text">
+        <label for="n-rel">Relation</label><input id="n-rel" type="text">
+        <label for="n-phone">Phone</label><input id="n-phone" type="tel">
+        <label for="n-email">Email</label><input id="n-email" type="email">
+        <div class="row"><button type="submit" class="primary">Add guardian</button></div>
+      </form>
+    </div>
+  </section>
+
+  <section id="pt-history" class="tabpane" hidden>
+    <div class="panel"><h2>Emergency history</h2><div id="h-list"><div class="skeleton"></div><div class="skeleton"></div></div></div>
+  </section>
+</main>
+
+<script src="/js/api.js"></script>
+<script src="/js/nav.js"></script>
+<script>
+let data = null;
+const field = (v) => esc(v || 'Not set');
+
+function showTab(name) {
+  document.querySelectorAll('.seg button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === name)));
+  document.querySelectorAll('.tabpane').forEach((p) => { p.hidden = p.id !== 'pt-' + name; });
+}
+document.querySelectorAll('.seg button').forEach((b) => b.addEventListener('click', () => showTab(b.dataset.tab)));
+
+function renderGuardians(list) {
+  $('g-list').innerHTML = list.map((g) => `<div class="card"><div class="row between" style="margin:0">
+    <div><b>${esc(g.guardian_name)}</b> <span class="muted">${esc(g.relation || '')}</span><br>
+    <span class="note">${esc(g.phone || 'no phone')} · ${esc(g.email || 'no email')}</span><br>
+    <span class="pill ${g.linked ? 'ready' : ''}">${g.linked ? 'Has a live-view account' : 'Alerted by phone only'}</span></div>
+    <button type="button" class="secondary small" data-del="${g.id}">Remove</button></div></div>`).join('') || '<p class="empty">No guardians yet.</p>';
+}
+
+function renderProfile(d) {
+  const p = d.profile;
+  $('p-hello').textContent = 'Hello, ' + d.user.name.split(' ')[0];
+  $('p-id').textContent = d.user.carelink_id;
+  $('p-name').textContent = d.user.name;
+  $('p-qr').src = d.qr_data_url;
+  const g = d.guardians[0];
+  $('p-summary').innerHTML = `<p><b>Blood group:</b> ${field(p.blood_group)}<br><b>Allergies:</b> ${field(p.allergies)}<br>
+    <b>Conditions:</b> ${field(p.conditions)}<br><b>Medications:</b> ${field(p.medications)}<br>
+    <b>Guardian:</b> ${g ? esc(g.guardian_name) + ' (' + esc(g.relation || 'guardian') + ')' : 'none'}</p>
+    <p class="note">${d.consent.guardian_alerts ? 'Guardians will be alerted.' : 'Guardian alerts are switched off.'}</p>`;
+  $('f-name').value = d.user.name; $('f-phone').value = d.user.phone || '';
+  $('f-blood').value = p.blood_group || ''; $('f-allergies').value = p.allergies || '';
+  $('f-conditions').value = p.conditions || ''; $('f-meds').value = p.medications || '';
+  $('f-c-guardian').checked = d.consent.guardian_alerts !== false; $('f-c-face').checked = d.consent.face === true;
+  renderGuardians(d.guardians);
+}
+
+async function loadProfile() {
+  data = await api('GET', '/api/me/profile');
+  renderProfile(data);
+}
+
+async function loadHistory() {
+  const r = await api('GET', '/api/me/sessions');
+  const s = r.sessions;
+  $('p-latest').innerHTML = s.length
+    ? `${badge(s[0].urgency_level)} <b>${esc(s[0].hospital_name || 'No hospital chosen')}</b><br><span class="note">${esc(fmtDate(s[0].created_at))} · ${esc(s[0].status)}</span>`
+    : '<p class="empty"><b>No emergencies yet</b>That is good news. They appear here if someone uses your ID.</p>';
+  $('h-list').innerHTML = s.length ? s.map((x) => `<details class="card"><summary>${badge(x.urgency_level)} <b>${esc(fmtDate(x.created_at))}</b>
+    · ${esc(x.hospital_name || 'no hospital')} · ${esc(x.status)}</summary>
+    <p class="note">${esc(x.urgency_reason || '')}</p>${renderTimeline(x.timeline)}</details>`).join('')
+    : '<p class="empty"><b>Nothing here yet</b>Emergency sessions linked to your ID will be listed with their full timeline.</p>';
+}
+
+$('profile-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  $('f-save').disabled = true;
+  try {
+    await api('PUT', '/api/me/profile', {
+      name: $('f-name').value, phone: $('f-phone').value, blood_group: $('f-blood').value, allergies: $('f-allergies').value,
+      conditions: $('f-conditions').value, medications: $('f-meds').value,
+      consent: { medical: true, guardian_alerts: $('f-c-guardian').checked, face: $('f-c-face').checked },
+    });
+    await loadProfile();
+    toast('Profile saved');
+  } catch (err) { /* banner shown */ } finally { $('f-save').disabled = false; }
+});
+
+$('guardian-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!$('n-name').value.trim()) { showError('Enter the guardian\'s name.'); return; }
+  try {
+    const r = await api('POST', '/api/me/guardians', { guardian_name: $('n-name').value, relation: $('n-rel').value, phone: $('n-phone').value, email: $('n-email').value });
+    renderGuardians(r.guardians);
+    $('guardian-form').reset();
+    toast('Guardian added');
+  } catch (err) { /* banner shown */ }
+});
+
+$('g-list').addEventListener('click', async (e) => {
+  const id = e.target.dataset && e.target.dataset.del;
+  if (!id) return;
+  try { renderGuardians((await api('DELETE', `/api/me/guardians/${id}`)).guardians); toast('Guardian removed'); } catch (err) { /* banner shown */ }
+});
+
+$('p-print').addEventListener('click', () => window.print());
+
+requireLogin('patient').then(() => { loadProfile().catch(() => {}); loadHistory().catch(() => {}); });
+</script>
+</body>
+</html>

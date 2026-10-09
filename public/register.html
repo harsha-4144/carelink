@@ -8,30 +8,43 @@
 </head>
 <body>
 <header class="topbar">
-  <a class="brand" href="/">CARELINK AI</a>
+  <a class="brand" href="/">CARELINK<span>AI</span></a>
+  <nav id="nav" class="nav" aria-label="Account"></nav>
   <span class="amb">Ambulance: 108</span>
   <a class="call" href="tel:112">Call 112</a>
 </header>
 <noscript><div class="banner">CARELINK needs JavaScript. If this is an emergency, call 112.</div></noscript>
 <div id="error-banner" class="banner" role="alert" hidden></div>
 <main>
-  <h1>Register a patient</h1>
-  <p class="tagline">Creates a CARELINK ID and a QR code that first responders can scan. Demo data only.</p>
-  <form id="reg-form">
-    <label for="name">Full name *</label><input id="name" type="text" required>
-    <label for="phone">Phone</label><input id="phone" type="tel">
-    <label for="blood_group">Blood group</label>
-    <select id="blood_group"><option value="">Unknown</option><option>A+</option><option>A-</option><option>B+</option><option>B-</option><option>AB+</option><option>AB-</option><option>O+</option><option>O-</option></select>
-    <label for="allergies">Allergies</label><input id="allergies" type="text" placeholder="e.g. Penicillin">
-    <label for="conditions">Medical conditions</label><input id="conditions" type="text">
-    <label for="medications">Medications</label><input id="medications" type="text">
-    <h2 style="margin-top:1rem">Guardian</h2>
-    <label for="guardian_name">Guardian name *</label><input id="guardian_name" type="text" required>
-    <label for="guardian_phone">Guardian phone</label><input id="guardian_phone" type="tel">
-    <label for="guardian_relation">Relation</label><input id="guardian_relation" type="text">
-    <h2 style="margin-top:1rem">Consent</h2>
-    <label class="check"><input type="checkbox" id="consent_medical" required> I consent to storing my medical information so responders can see it in an emergency. *</label>
-    <label class="check"><input type="checkbox" id="consent_guardian" required> I consent to my guardian being alerted in an emergency. *</label>
+  <div id="reg-intro" class="page-head"><div><h1>Create your CARELINK ID</h1>
+    <p>One minute. Gives responders your emergency summary through a QR code. Demo data only, please don't enter real medical records.</p></div></div>
+  <form id="reg-form" class="panel" novalidate>
+    <h2>Account</h2>
+    <div class="field-row">
+      <div><label for="name">Full name *</label><input id="name" type="text" autocomplete="name" required></div>
+      <div><label for="phone">Phone</label><input id="phone" type="tel" autocomplete="tel"></div>
+      <div><label for="email">Email *</label><input id="email" type="email" autocomplete="email" required></div>
+      <div><label for="password">Password (8+ characters) *</label><input id="password" type="password" autocomplete="new-password" minlength="8" required></div>
+    </div>
+    <h2 style="margin-top:1.4rem">Medical summary</h2>
+    <div class="field-row">
+      <div><label for="blood_group">Blood group</label>
+        <select id="blood_group"><option value="">Unknown</option><option>A+</option><option>A-</option><option>B+</option><option>B-</option><option>AB+</option><option>AB-</option><option>O+</option><option>O-</option></select></div>
+      <div><label for="allergies">Allergies</label><input id="allergies" type="text" placeholder="e.g. Penicillin"></div>
+      <div><label for="conditions">Medical conditions</label><input id="conditions" type="text"></div>
+      <div><label for="medications">Medications</label><input id="medications" type="text"></div>
+    </div>
+    <h2 style="margin-top:1.4rem">First guardian</h2>
+    <p class="note">They are alerted in an emergency. If they add an account with this email they can also follow it live.</p>
+    <div class="field-row">
+      <div><label for="guardian_name">Guardian name *</label><input id="guardian_name" type="text" required></div>
+      <div><label for="guardian_relation">Relation</label><input id="guardian_relation" type="text"></div>
+      <div><label for="guardian_phone">Phone</label><input id="guardian_phone" type="tel"></div>
+      <div><label for="guardian_email">Email (for live view)</label><input id="guardian_email" type="email"></div>
+    </div>
+    <h2 style="margin-top:1.4rem">Consent</h2>
+    <label class="check"><input type="checkbox" id="consent_medical"> I consent to storing my medical information so responders can see it in an emergency. *</label>
+    <label class="check"><input type="checkbox" id="consent_guardian"> I consent to my guardians being alerted in an emergency. *</label>
     <label class="check"><input type="checkbox" id="consent_face"> (Optional) I consent to face recognition for identification. Only used if the server has it enabled.</label>
     <div id="face-capture" hidden>
       <p class="note">Face recognition is enabled on this server. Tick the optional consent above, then capture a face.</p>
@@ -39,18 +52,21 @@
       <div class="row"><button type="button" id="face-capture-btn" class="secondary">Capture face</button></div>
       <p id="face-capture-msg" class="note" aria-live="polite"></p>
     </div>
-    <div class="row"><button type="submit" id="reg-submit">Register and create QR</button></div>
+    <p id="reg-msg" class="note" role="alert" style="color:var(--red-dark)"></p>
+    <div class="row"><button type="submit" id="reg-submit" class="primary">Create my CARELINK ID</button><a href="/login.html" class="btn ghost">I already have an account</a></div>
   </form>
-  <div id="reg-result" class="qr-card" hidden>
+  <div id="reg-result" class="panel qr-card" hidden>
     <h2 id="r-name"></h2>
-    <p>CARELINK ID: <strong class="big" id="r-id"></strong></p>
-    <img id="r-qr" alt="QR code for this patient" width="300" height="300">
-    <p class="note">Scan this at the start of an emergency, or type the ID.</p>
-    <div class="row no-print" style="justify-content:center"><button id="print-btn" type="button">Print</button><a class="btn secondary" href="/">Back to emergency screen</a></div>
+    <p>Your CARELINK ID</p><div class="big" id="r-id"></div>
+    <img id="r-qr" alt="QR code for this patient" width="260" height="260">
+    <p class="note">Print it or save it to your phone. Responders scan it, or type your ID.</p>
+    <div class="row no-print" style="justify-content:center"><button id="print-btn" type="button" class="secondary">Print</button><a class="btn primary" href="/patient.html">Open my dashboard</a></div>
   </div>
 </main>
-<script src="/js/api.js"></script>
 <script src="/js/face.js"></script>
+
+<script src="/js/api.js"></script>
+<script src="/js/nav.js"></script>
 <script>
 let faceDescriptor = null;
 api('GET', '/api/health').then((h) => { if (h.face_enabled) $('face-capture').hidden = false; }).catch(() => {});
@@ -65,25 +81,31 @@ $('face-capture-btn').addEventListener('click', async () => {
     if (faceDescriptor) Face.stop();
   } catch (e) { msg.textContent = 'Face capture unavailable (' + e.message + ').'; }
 });
+
 $('reg-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const btn = $('reg-submit');
+  const v = (id) => $(id).value.trim();
+  $('reg-msg').textContent = '';
+  if (!v('name') || !v('email') || !$('password').value || !v('guardian_name')) { $('reg-msg').textContent = 'Please fill the fields marked *.'; return; }
+  if (!$('consent_medical').checked || !$('consent_guardian').checked) { $('reg-msg').textContent = 'The two required consents must be ticked.'; return; }
   btn.disabled = true;
   try {
-    const v = (id) => $(id).value.trim();
     const r = await api('POST', '/api/patients', {
-      name: v('name'), phone: v('phone'), blood_group: $('blood_group').value, allergies: v('allergies'),
-      conditions: v('conditions'), medications: v('medications'),
-      guardian_name: v('guardian_name'), guardian_phone: v('guardian_phone'), guardian_relation: v('guardian_relation'),
+      name: v('name'), phone: v('phone'), email: v('email'), password: $('password').value,
+      blood_group: $('blood_group').value, allergies: v('allergies'), conditions: v('conditions'), medications: v('medications'),
+      guardian_name: v('guardian_name'), guardian_phone: v('guardian_phone'), guardian_relation: v('guardian_relation'), guardian_email: v('guardian_email'),
       face_descriptor: faceDescriptor,
       consent: { medical: $('consent_medical').checked, guardian_alerts: $('consent_guardian').checked, face: $('consent_face').checked },
-    });
+    }, { quiet: true });
     $('r-name').textContent = v('name');
     $('r-id').textContent = r.carelink_id;
     $('r-qr').src = r.qr_data_url;
     $('reg-result').hidden = false;
     $('reg-form').hidden = true;
-  } catch (err) { /* banner shown */ } finally { btn.disabled = false; }
+    $('reg-intro').hidden = true;
+    renderNav(r.user);
+  } catch (err) { $('reg-msg').textContent = err.message; } finally { btn.disabled = false; }
 });
 $('print-btn').addEventListener('click', () => window.print());
 </script>

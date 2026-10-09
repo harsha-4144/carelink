@@ -21,8 +21,26 @@ npm start         # http://localhost:3000
 
 No `.env` is needed. Optionally `cp .env.example .env` to change settings. `npm run dev` restarts on file changes.
 
-Pages: `/` (bystander wizard), `/register.html` (register patient, shows QR), `/guardian.html?session=ID`,
-`/hospital.html?hospital=ID`.
+Pages: `/` (landing), `/emergency.html` (bystander wizard, no login), `/register.html` (patient sign-up, shows QR),
+`/signup.html` (guardian and hospital staff), `/login.html`, `/patient.html`, `/guardian.html`, `/hospital.html`.
+
+## Accounts and personas
+
+| Persona | Account? | What they get |
+| --- | --- | --- |
+| Bystander | none | The 7-step emergency wizard. Gets a private link to the live guardian view |
+| Patient | email + password (`/register.html`) | Emergency ID and QR, edit medical profile and consent, manage guardians, emergency history with timelines |
+| Guardian | email + password (`/signup.html`) | Live view of emergencies for the patients who added their email as a guardian; hospital readiness stepper; ETA countdown |
+| Hospital staff | email + password + staff code | Own hospital's incoming queue, Accept / Preparing / Ready / Arrived actions, ICU availability switch (affects matching), sound and toast on critical alerts |
+
+Demo accounts, all with password `demo1234`: patients `asha@demo.test`, `ravi@`, `meera@`, `arjun@`, `sana@`;
+guardians `rohan@`, `sunita@`, `anil@`, `lakshmi@`, `imran@`; hospital staff `priya@demo.test` (Riverside),
+`kiran@demo.test` (Heartline). Staff sign-up code: `HACKHERS` (override with `STAFF_CODE`). Accounts are reset by `npm run seed`.
+
+Security: passwords hashed with scrypt, random session tokens (stored hashed) in an HttpOnly cookie, login and ID-lookup
+rate limits, role checks on every dashboard API. An emergency session can be read only by the bystander link holder
+(`key`), the patient, a linked guardian, or staff of the chosen hospital. Emergency start, identify, triage, match,
+route and alert stay public by design (break-glass: the bystander has no account).
 
 ## Environment variables
 
@@ -38,14 +56,15 @@ Pages: `/` (bystander wizard), `/register.html` (register patient, shows QR), `/
 
 ## Demo script (under 2 minutes)
 
-1. Tap **SOS** (or say "emergency" in a browser that supports speech recognition).
+0. (Optional) Log in as `kiran@demo.test` on a second window (hospital) and `rohan@demo.test` on a third (guardian, Asha's family).
+1. Open `/emergency.html` and tap **SOS** (or say "emergency" in a browser that supports speech recognition).
 2. Enter `CL-1001`, or scan the QR from `/register.html`.
 3. Tap **Unconscious** and **Chest pain**, then **Assess urgency**.
 4. Show the **Critical** result with its reason and the "AI estimate, not a diagnosis" line.
 5. Show the top 3 hospitals and expand **Score breakdown** (S, F, E, D, T).
 6. Pick the first one (Heartline Cardiac Centre) and show the route and ETA.
-7. **Alert hospital and guardian**, then open the guardian view and hospital dashboard side by side.
-8. Tap **Patient arrived** and show the timeline.
+7. **Alert hospital and guardian**, then watch the hospital queue and the guardian view update live. At the hospital tap Accept, Preparing, Ready: the guardian stepper follows.
+8. Tap **Patient arrived** (bystander or hospital) and show the timeline. The patient's history shows it too.
 
 Reset between runs with `npm run seed` (restart not required).
 
@@ -58,6 +77,7 @@ Reset between runs with `npm run seed` (restart not required).
 - **Substring keyword matching** for triage, after lower-casing; `conscious:false` / `breathing:false` are always Critical.
 - **Status never goes backwards** (re-running match after alert does not reset `alerted`).
 - **Guardian alerts respect consent**: if a patient's stored consent has `guardian_alerts` false, no guardian alert is created.
+- **Accounts added after the original spec** (login, personas, access control, hospital workflow); the bystander flow stays account-free.
 - **Extra endpoint** `GET /api/hospitals` (id, name, location) lets the hospital dashboard show a hospital picker and title.
 - **Timestamps** from SQLite are converted to ISO UTC strings in API responses.
 - **Alert for unidentified patients** is sent to the hospital only, with "Unidentified patient".
@@ -81,7 +101,7 @@ headless build environment, so treat it as untested on a real camera.
 - **Face recognition is optional** and off by default; the demo never depends on it.
 - Voice trigger works only in browsers with the Web Speech API (Chrome, Edge, Safari); elsewhere the mic button is hidden and SOS still works.
 - OSRM public server has no SLA; if it is slow or down the route is a straight-line estimate (`source: "estimate"`).
-- Hospitals, patients and phone numbers are fictional. No login or authentication: this is a demo.
+- Hospitals, patients and phone numbers are fictional. Auth is demo-grade (no email verification, no password reset, in-memory rate limits, cookie not `Secure` over plain http).
 - Not a medical device. Urgency is an advisory estimate and does not replace emergency services (call 112; ambulance 108).
 
 ## Checks

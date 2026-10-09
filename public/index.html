@@ -4,144 +4,89 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CARELINK AI</title>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
+<meta name="description" content="When the patient can't speak, CARELINK speaks for them. Emergency identification, triage, hospital matching and alerts in one tap.">
 <link rel="stylesheet" href="/css/app.css">
 </head>
 <body>
 <header class="topbar">
-  <a class="brand" href="/">CARELINK AI</a>
+  <a class="brand" href="/">CARELINK<span>AI</span></a>
+  <nav id="nav" class="nav" aria-label="Account"></nav>
   <span class="amb">Ambulance: 108</span>
   <a class="call" href="tel:112">Call 112</a>
 </header>
 <noscript><div class="banner">CARELINK needs JavaScript. If this is an emergency, call 112.</div></noscript>
 <div id="error-banner" class="banner" role="alert" hidden></div>
-<main>
-  <ol class="progress" id="progress" aria-label="Progress">
-    <li data-p="identify">Identify</li><li data-p="assess">Assess</li><li data-p="match">Match</li>
-    <li data-p="route">Route</li><li data-p="alert">Alert</li><li data-p="prepare">Prepare</li><li data-p="arrive">Arrive</li>
-  </ol>
 
-  <!-- 1. Start -->
-  <section id="step-start" class="step active">
-    <h1>Someone needs help?</h1>
-    <p class="tagline">When the patient can't speak, CARELINK speaks for them.</p>
-    <div class="start-actions">
-      <button id="sos-btn" class="danger" type="button" aria-label="SOS, start emergency">SOS</button>
-      <button id="mic-btn" class="secondary" type="button" hidden>🎤 Say "emergency"</button>
-      <p id="start-status" class="note" aria-live="polite"></p>
-    </div>
-    <p class="note">Your location is used only to find the nearest suitable hospital. If location is blocked, the demo location is used.</p>
-    <p class="note"><a href="/register.html">Register a patient</a> to get a CARELINK ID and QR code.</p>
-  </section>
-
-  <!-- 2. Identify -->
-  <section id="step-identify" class="step">
-    <h2>Identify the patient</h2>
-    <div class="tabs" role="tablist">
-      <button type="button" class="active" data-tab="qr">Scan QR</button>
-      <button type="button" data-tab="id">Enter CARELINK ID</button>
-      <button type="button" data-tab="face">Face (if enabled)</button>
-    </div>
-    <div id="tab-qr" class="tabpanel active">
-      <div id="qr-reader"></div>
-      <div id="qr-fallback" class="fallback" hidden>QR scanner unavailable. Use "Enter CARELINK ID" instead.</div>
-      <button id="qr-start" type="button" class="secondary">Start camera</button>
-    </div>
-    <div id="tab-id" class="tabpanel">
-      <label for="carelink-id">CARELINK ID (e.g. CL-1001)</label>
-      <input id="carelink-id" type="text" autocomplete="off" autocapitalize="characters" placeholder="CL-1001">
-      <div class="row"><button id="id-submit" type="button">Look up patient</button></div>
-    </div>
-    <div id="tab-face" class="tabpanel">
-      <p id="face-msg" class="note">Face recognition is turned off on this server. Use QR or CARELINK ID.</p>
-      <div id="face-area" hidden>
-        <video id="face-video" autoplay playsinline muted style="width:100%;max-width:360px;border-radius:10px"></video>
-        <div class="row"><button id="face-scan" type="button">Scan face</button></div>
-      </div>
-    </div>
-    <p id="identify-msg" class="note" aria-live="polite"></p>
-    <div id="patient-card" class="ok" hidden></div>
-    <div class="row">
-      <button id="identify-next" type="button" hidden>Continue</button>
-      <button id="skip-identify" type="button" class="secondary">Skip, unknown patient</button>
-    </div>
-  </section>
-
-  <!-- 3. Assess -->
-  <section id="step-assess" class="step">
-    <h2>Assess the situation</h2>
-    <div class="chips" id="chips">
-      <button type="button" class="chip" aria-pressed="false" data-symptom="unconscious">Unconscious</button>
-      <button type="button" class="chip" aria-pressed="false" data-symptom="not breathing">Not breathing</button>
-      <button type="button" class="chip" aria-pressed="false" data-symptom="chest pain">Chest pain</button>
-      <button type="button" class="chip" aria-pressed="false" data-symptom="severe bleeding">Severe bleeding</button>
-      <button type="button" class="chip" aria-pressed="false" data-symptom="fracture">Fracture</button>
-      <button type="button" class="chip" aria-pressed="false" data-symptom="burn">Burn</button>
-      <button type="button" class="chip" aria-pressed="false" data-symptom="stroke">Stroke signs</button>
-      <button type="button" class="chip" aria-pressed="false" data-symptom="difficulty breathing">Breathing difficulty</button>
-    </div>
-    <label for="symptoms">Other symptoms (optional)</label>
-    <textarea id="symptoms" rows="2" placeholder="Describe what you see"></textarea>
-    <div class="toggles">
-      <label class="check"><input type="checkbox" id="conscious" checked> Conscious?</label>
-      <label class="check"><input type="checkbox" id="breathing" checked> Breathing?</label>
-    </div>
-    <div class="row"><button id="assess-btn" type="button">Assess urgency</button></div>
-    <div id="triage-result" class="result" hidden></div>
-    <div class="row"><button id="to-match" type="button" hidden>Find best hospitals</button></div>
-    <p class="note">Urgency is an advisory estimate and does not replace emergency services.</p>
-  </section>
-
-  <!-- 4. Match -->
-  <section id="step-match" class="step">
-    <h2>Best hospitals for this patient</h2>
-    <div id="hospital-list"><p class="empty">Loading hospitals…</p></div>
-    <div class="row"><button id="to-route" type="button" disabled>Show route to selected hospital</button></div>
-  </section>
-
-  <!-- 5. Route -->
-  <section id="step-route" class="step">
-    <h2>Route</h2>
-    <div id="route-summary"></div>
-    <div id="map-fallback" class="fallback" hidden>Map library failed to load. Route details are shown above.</div>
-    <div id="map"></div>
-    <p class="note">Traffic is a simulated multiplier by time of day (no live traffic data).</p>
-    <div class="row"><button id="to-alert" type="button">Continue to alert</button></div>
-  </section>
-
-  <!-- 6. Alert / Prepare -->
-  <section id="step-alert" class="step">
-    <h2>Alert hospital and guardian</h2>
-    <p id="alert-intro">The hospital will see the patient's summary, urgency and ETA so it can prepare.</p>
-    <div class="row"><button id="alert-btn" type="button" class="danger">Alert hospital and guardian</button></div>
-    <div id="alert-success" class="ok" hidden>
-      <strong>Alerts sent. The hospital is preparing.</strong>
-      <p id="alert-detail"></p>
+<section class="hero">
+  <div class="hero-in">
+    <div>
+      <span class="eyebrow">Emergency coordination</span>
+      <h1>When the patient can't speak, <em>CARELINK speaks for them.</em></h1>
+      <p class="lead">Scan a QR or type an ID. In seconds the right hospital knows who is coming, how urgent it is, and when they arrive, and the family is told too.</p>
       <div class="row">
-        <a id="guardian-link" class="btn secondary" target="_blank" rel="noopener" href="#">Open guardian view</a>
-        <a id="hospital-link" class="btn secondary" target="_blank" rel="noopener" href="#">Open hospital dashboard</a>
+        <a class="btn primary sos-cta" href="/emergency.html">Start emergency</a>
+        <a class="btn secondary" href="/register.html">Create my CARELINK ID</a>
       </div>
+      <p class="note" style="color:#94a3b8;margin-top:1rem">No account needed in an emergency. Always call 112 first if someone is in danger.</p>
     </div>
-    <div class="row"><button id="to-arrive" type="button" hidden>Continue</button></div>
-  </section>
+    <div class="mock" aria-label="Example of an alert">
+      <div class="tag">Example alert, synthetic data</div>
+      <div class="line"><b>Asha Verma</b><span class="badge Critical">Critical</span></div>
+      <div class="line"><span>Blood group</span><b>B+</b></div>
+      <div class="line"><span>Allergy</span><b>Penicillin</b></div>
+      <div class="line"><span>Matched hospital</span><b>Heartline Cardiac Centre</b></div>
+      <div class="line"><span>ETA</span><b>12 min</b></div>
+      <div class="line"><span>Guardian</span><b>Rohan notified ✓</b></div>
+    </div>
+  </div>
+</section>
 
-  <!-- 7. Arrive -->
-  <section id="step-arrive" class="step">
-    <h2>Arrival</h2>
-    <div class="row"><button id="arrive-btn" type="button">Patient arrived</button></div>
-    <div id="arrive-done" class="ok" hidden><strong>Patient has arrived. Emergency closed.</strong></div>
-    <div id="timeline"></div>
-    <div class="row"><button id="restart" type="button" class="secondary" hidden>Start a new emergency</button></div>
-  </section>
-</main>
+<section class="section">
+  <h2>Seven steps from collapse to care</h2>
+  <p class="sub">One flow for the bystander, with live views for everyone who needs to know.</p>
+  <div class="steps">
+    <div><b>Identify</b><span>QR or CARELINK ID unlocks the emergency summary.</span></div>
+    <div><b>Assess</b><span>Symptoms become an urgency estimate.</span></div>
+    <div><b>Match</b><span>Top 3 hospitals ranked and explained.</span></div>
+    <div><b>Route</b><span>Map, distance and ETA.</span></div>
+    <div><b>Alert</b><span>Hospital and guardians notified.</span></div>
+    <div><b>Prepare</b><span>Hospital accepts and gets ready.</span></div>
+    <div><b>Arrive</b><span>Timeline closes the loop.</span></div>
+  </div>
+</section>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js" onerror="window.__leafletFailed=true"></script>
-<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" onerror="window.__qrFailed=true"></script>
+<section class="section" style="padding-top:0">
+  <h2>Built for the four people in every emergency</h2>
+  <div class="grid four" style="margin-top:1rem">
+    <div class="panel persona"><div class="ico"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#b91c1c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="5" r="2.5"/><path d="M12 8v7M8 11h8M10 21l2-6 2 6"/></svg></div><h3>Bystander</h3><ul><li>One big SOS or say "emergency"</li><li>Guided steps, no sign-up</li></ul><div class="row"><a class="btn primary small" href="/emergency.html">Open</a></div></div>
+    <div class="panel persona"><div class="ico"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#b91c1c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M6 16c.6-1.5 5.4-1.5 6 0M14 10h4M14 14h3"/></svg></div><h3>Patient</h3><ul><li>Your medical ID and QR</li><li>Control consent and guardians</li></ul><div class="row"><a class="btn small" href="/register.html">Register</a><a class="btn secondary small" href="/login.html">Log in</a></div></div>
+    <div class="panel persona"><div class="ico"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#b91c1c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.5 2.7-6 6-6s6 2.5 6 6"/><circle cx="17" cy="9" r="2.2"/><path d="M16 14.2c3 0 5 2 5 5"/></svg></div><h3>Guardian</h3><ul><li>Live status of your person</li><li>See which hospital, how far</li></ul><div class="row"><a class="btn small" href="/signup.html?role=guardian">Join</a><a class="btn secondary small" href="/login.html">Log in</a></div></div>
+    <div class="panel persona"><div class="ico"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#b91c1c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 21V5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v16M2 21h20M12 8v6M9 11h6"/></svg></div><h3>Hospital</h3><ul><li>Incoming patient queue</li><li>Accept, prepare, mark ready</li></ul><div class="row"><a class="btn small" href="/signup.html?role=hospital_staff">Staff sign-up</a><a class="btn secondary small" href="/login.html">Log in</a></div></div>
+  </div>
+</section>
+
+<section class="section" style="padding-top:0">
+  <div class="grid two">
+    <div class="panel"><h3>Privacy by design</h3><p class="muted">Medical details are stored only with consent. Face recognition is off by default. QR codes carry a random token, never medical data. Every lookup is logged in the emergency timeline.</p></div>
+    <div class="panel"><h3>Honest about AI</h3><p class="muted">Urgency is a transparent rule engine with optional AI refinement that can never lower a critical result. It is an advisory estimate and does not replace emergency services.</p></div>
+  </div>
+</section>
+
+<section class="section" style="padding-top:0">
+  <div class="demo-box">
+    <h3 style="color:#fff">Try it as a judge</h3>
+    <p>Demo accounts (password <code>demo1234</code>):</p>
+    <div class="grid three">
+      <div>Patient: <code>asha@demo.test</code></div>
+      <div>Guardian: <code>rohan@demo.test</code></div>
+      <div>Hospital: <code>kiran@demo.test</code> (Heartline)</div>
+    </div>
+    <p style="margin-top:.8rem">Open the <a href="/login.html">login page</a> and tap a demo account, or run the emergency as a bystander with ID <code>CL-1001</code>. All data is synthetic.</p>
+  </div>
+</section>
+
+<footer class="site">CARELINK AI · HackHERS 2.0 · Synthetic demo data · Not a medical device. Urgency is an advisory estimate and does not replace emergency services.</footer>
 <script src="/js/api.js"></script>
-<script src="/js/voice.js"></script>
-<script src="/js/qr.js"></script>
-<script src="/js/map.js"></script>
-<script src="/js/face.js"></script>
-<script src="/js/app.js"></script>
+<script src="/js/nav.js"></script>
 </body>
 </html>

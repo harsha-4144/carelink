@@ -4,6 +4,9 @@
 const fs = require('fs');
 const path = require('path');
 
+// ids created at runtime by the scripts themselves
+const DYNAMIC = new Set(['logout-btn', 'toast-host']);
+
 const pub = path.join(__dirname, '..', 'public');
 const htmlFiles = fs.readdirSync(pub).filter((f) => f.endsWith('.html'));
 const jsFiles = fs.readdirSync(path.join(pub, 'js')).filter((f) => f.endsWith('.js'));
@@ -19,7 +22,7 @@ const sources = [
 async function routes(base) {
   const found = [];
   for (const s of sources) {
-    for (const m of s.code.matchAll(/api\(\s*'(GET|POST)'\s*,\s*([`'"])(\/api\/[^`'"]*)\2/g)) found.push({ src: s.name, method: m[1], raw: m[3] });
+    for (const m of s.code.matchAll(/api\(\s*'(GET|POST|PUT|DELETE)'\s*,\s*([`'"])(\/api\/[^`'"]*)\2/g)) found.push({ src: s.name, method: m[1], raw: m[3] });
   }
   if (!found.length) throw new Error('no api() calls found; checker is broken');
   let bad = 0;
@@ -28,7 +31,7 @@ async function routes(base) {
     if (url.endsWith('/')) url += '1';
     const q = f.raw.includes('?') ? '?' + f.raw.split('?')[1].replace(/\$\{[^}]*\}/g, '1') : '';
     const r = await fetch(base + url + (f.method === 'GET' ? q : ''), {
-      method: f.method, headers: { 'Content-Type': 'application/json' }, body: f.method === 'POST' ? '{}' : undefined,
+      method: f.method, headers: { 'Content-Type': 'application/json' }, body: f.method !== 'GET' ? '{}' : undefined,
     });
     let msg = '';
     try { msg = (await r.json()).message; } catch (e) { /* binary or empty */ }
@@ -49,17 +52,17 @@ function ids() {
   let bad = 0;
   for (const f of jsFiles) {
     for (const id of usedIn(read('js/' + f))) {
-      if (!allIds.has(id)) { console.error(`js/${f}: id "${id}" not found in any HTML`); bad++; }
+      if (!allIds.has(id) && !DYNAMIC.has(id)) { console.error(`js/${f}: id "${id}" not found in any HTML`); bad++; }
     }
   }
-  // index.html's wizard must find all its ids on that very page
+  // the wizard must find all its ids on emergency.html
   for (const id of usedIn(read('js/app.js'))) {
-    if (!perPage['index.html'].has(id)) { console.error(`app.js: id "${id}" missing from index.html`); bad++; }
+    if (!perPage['emergency.html'].has(id)) { console.error(`app.js: id "${id}" missing from emergency.html`); bad++; }
   }
   for (const f of htmlFiles) {
     for (const code of inlineScripts(read(f))) {
       for (const id of usedIn(code)) {
-        if (!perPage[f].has(id)) { console.error(`${f} inline script: id "${id}" missing`); bad++; }
+        if (!perPage[f].has(id) && !DYNAMIC.has(id)) { console.error(`${f} inline script: id "${id}" missing`); bad++; }
       }
     }
   }

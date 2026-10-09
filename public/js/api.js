@@ -1,4 +1,4 @@
-// Shared helpers for every page: API calls, error banner, escaping, badges, time.
+// Shared helpers for every page: API calls, error banner, toasts, escaping, badges, time.
 const $ = (id) => document.getElementById(id);
 
 function showError(msg) {
@@ -10,7 +10,8 @@ function clearError() {
   if (b) b.hidden = true;
 }
 
-async function api(method, url, body) {
+// opts.quiet: do not show the red/yellow banner (caller handles the error).
+async function api(method, url, body, opts = {}) {
   let res;
   try {
     res = await fetch(url, {
@@ -20,18 +21,29 @@ async function api(method, url, body) {
     });
   } catch (e) {
     const err = new Error('Cannot reach the CARELINK server. Check your connection and try again.');
-    showError(err.message);
+    if (!opts.quiet) showError(err.message);
     throw err;
   }
   let data = null;
   try { data = await res.json(); } catch (e) { /* non-JSON body */ }
   if (!res.ok) {
     const err = new Error((data && data.message) || `Request failed (${res.status})`);
-    showError(err.message);
+    err.status = res.status;
+    if (!opts.quiet) showError(err.message);
     throw err;
   }
-  clearError();
+  if (!opts.quiet) clearError();
   return data;
+}
+
+function toast(msg, kind) {
+  let host = $('toast-host');
+  if (!host) { host = document.createElement('div'); host.id = 'toast-host'; host.className = 'toast-host'; document.body.appendChild(host); }
+  const t = document.createElement('div');
+  t.className = 'toast' + (kind ? ' ' + kind : '');
+  t.textContent = msg;
+  host.appendChild(t);
+  setTimeout(() => t.remove(), 5000);
 }
 
 function esc(v) {
@@ -47,6 +59,10 @@ function fmtTime(iso) {
   const d = new Date(iso);
   return isNaN(d) ? '' : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
+function fmtDate(iso) {
+  const d = new Date(iso);
+  return isNaN(d) ? '' : d.toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
 
 function renderTimeline(items) {
   if (!items || !items.length) return '<p class="empty">No events yet.</p>';
@@ -55,4 +71,8 @@ function renderTimeline(items) {
 
 function mapsLink(lat, lng) {
   return `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lng}#map=17/${lat}/${lng}`;
+}
+
+function skeleton(n = 3) {
+  return Array.from({ length: n }, () => '<div class="skeleton"></div>').join('');
 }

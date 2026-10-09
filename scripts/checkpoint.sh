@@ -33,6 +33,9 @@ stop_server() { [ -n "$SERVER_PID" ] && kill "$SERVER_PID" 2>/dev/null; wait "$S
 
 # JSON helpers via node
 jq_() { node -e "const d=JSON.parse(require('fs').readFileSync(0,'utf8'));const r=($1);if(!r){console.error('assertion failed: '+JSON.stringify(d).slice(0,300));process.exit(1)}"; }
+# login_as <email>: stores a cookie jar in $TMP and echoes its path
+login_as() { local jar="$TMP/$1.jar"; curl -s -c "$jar" -X POST -H 'Content-Type: application/json' -d "{\"email\":\"$1\",\"password\":\"demo1234\"}" "$BASE/api/auth/login" >/dev/null; echo "$jar"; }
+getj() { curl -s -b "$1" "$BASE$2"; }
 post() { curl -s -X POST -H 'Content-Type: application/json' -d "$2" "$BASE$1"; }
 get() { curl -s "$BASE$1"; }
 
@@ -52,6 +55,7 @@ phase1() {
   local S H R
   S=$(post /api/emergency '{"lat":17.7231,"lng":83.3013,"triggered_by":"sos"}')
   SID=$(echo "$S" | node -e "console.log(JSON.parse(require('fs').readFileSync(0,'utf8')).session_id)")
+  KEY=$(echo "$S" | node -e "console.log(JSON.parse(require('fs').readFileSync(0,'utf8')).access_key)")
   [ -n "$SID" ] && [ "$SID" != "undefined" ] && pass "POST /api/emergency -> session $SID" || fail "POST /api/emergency" "$S"
   R=$(post /api/identify "{\"session_id\":$SID,\"method\":\"id\",\"value\":\"CL-1001\"}")
   echo "$R" | jq_ "d.found===true && d.patient.name==='Asha Verma' && !JSON.stringify(d).includes('qr_token') && !JSON.stringify(d).includes('face_embedding')" && pass "identify CL-1001 found, no secrets" || fail "identify CL-1001" "$R"
@@ -68,17 +72,18 @@ phase1() {
   echo "$R" | jq_ "typeof d.eta_min==='number'" && pass "route numeric eta_min" || fail "route" "$R"
   R=$(post /api/alert "{\"session_id\":$SID,\"hospital_id\":$H}")
   echo "$R" | jq_ "d.alerts.filter(a=>a.target_type==='hospital').length===1 && d.alerts.filter(a=>a.target_type==='guardian').length===1" && pass "alert: 1 hospital + 1 guardian" || fail "alert" "$R"
-  R=$(get "/api/sessions/$SID")
+ R=$(get "/api/sessions/$SID"); echo "$R" | jq_ "d.message" && pass "session without key/login is refused (401)" || fail "session access control" "$R"
+  R=$(get "/api/sessions/$SID?key=$KEY")
   echo "$R" | jq_ "d.status==='alerted' && d.timeline.length>0" && pass "session alerted, timeline non-empty" || fail "session" "$R"
   R=$(post /api/patients '{"name":"X","consent":{"medical":false,"guardian_alerts":true}}')
   [ "$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' -d '{"name":"X","consent":{"medical":false,"guardian_alerts":true}}' $BASE/api/patients)" = "400" ] && pass "register w/o consent -> 400" || fail "register w/o consent" "not 400"
-  R=$(post /api/patients '{"name":"Test Person","phone":"1","blood_group":"A+","allergies":"None","conditions":"None","medications":"None","guardian_name":"G","guardian_phone":"2","guardian_relation":"Friend","consent":{"medical":true,"guardian_alerts":true,"face":false}}')
+  R=$(post /api/patients '{"name":"Test Person","email":"cp@test.dev","password":"password123","phone":"1","blood_group":"A+","allergies":"None","conditions":"None","medications":"None","guardian_name":"G","guardian_phone":"2","guardian_relation":"Friend","consent":{"medical":true,"guardian_alerts":true,"face":false}}')
   echo "$R" | jq_ "/^CL-/.test(d.carelink_id) && d.qr_data_url.startsWith('data:image/png')" && pass "register with consent -> CL- id + png QR" || fail "register" "$R"
 }
 
 # ---------- Phase 2 ----------
 phase2() {
-  for p in / /guardian.html /hospital.html /register.html; do
+  for p in / /emergency.html /login.html /signup.html /register.html /patient.html /guardian.html /hospital.html; do
     c=$(curl -s -o /dev/null -w '%{http_code}' "$BASE$p")
     [ "$c" = "200" ] && pass "GET $p 200" || fail "GET $p" "status $c"
   done
@@ -89,7 +94,7 @@ phase2() {
 
 # ---------- Phase 3 ----------
 phase3() {
-  check "Leaflet + html5-qrcode script tags with fallback message" bash -c "grep -q leaflet public/index.html && grep -q html5-qrcode public/index.html && grep -qi 'map library' public/index.html && grep -qi 'scanner' public/index.html"
+  check "Leaflet + html5-qrcode script tags with fallback message" bash -c "grep -q leaflet public/emergency.html && grep -q html5-qrcode public/emergency.html && grep -qi 'map library' public/emergency.html && grep -qi 'scanner' public/emergency.html"
   check "voice code guarded by feature detection" bash -c "grep -q 'SpeechRecognition' public/js/voice.js && grep -q 'webkitSpeechRecognition' public/js/voice.js && grep -q 'supported' public/js/voice.js"
   stop_server
   MOCK_MODE=false start_server || { fail "server (MOCK_MODE=false)" "$(tail -3 $TMP/server.log)"; return; }
@@ -110,19 +115,21 @@ phase3() {
 # ---------- Phase 4 ----------
 phase4() {
   local S R H
-  S=$(post /api/emergency '{"triggered_by":"voice"}'); SID=$(echo "$S" | node -e "console.log(JSON.parse(require('fs').readFileSync(0,'utf8')).session_id)")
+  S=$(post /api/emergency '{"triggered_by":"voice"}'); SID=$(echo "$S" | node -e "console.log(JSON.parse(require('fs').readFileSync(0,'utf8')).session_id)"); KEY=$(echo "$S" | node -e "console.log(JSON.parse(require('fs').readFileSync(0,'utf8')).access_key)")
   post /api/identify "{\"session_id\":$SID,\"method\":\"id\",\"value\":\"CL-1004\"}" >/dev/null
   post /api/triage "{\"session_id\":$SID,\"symptoms\":\"chest pain\"}" >/dev/null
   R=$(get "/api/hospitals/match?session_id=$SID"); H=$(echo "$R" | node -e "console.log(JSON.parse(require('fs').readFileSync(0,'utf8')).hospitals[0].id)")
   post /api/route "{\"session_id\":$SID,\"hospital_id\":$H}" >/dev/null
   post /api/alert "{\"session_id\":$SID,\"hospital_id\":$H}" >/dev/null
-  R=$(get "/api/alerts?target_type=hospital&target_id=$H")
+  [ "$(curl -s -o /dev/null -w '%{http_code}' "$BASE/api/alerts?target_type=hospital&target_id=$H")" = "401" ] && pass "alerts without login -> 401" || fail "alerts access control" "not 401"
+  KIRAN=$(login_as kiran@demo.test)
+  R=$(getj "$KIRAN" "/api/alerts?target_type=hospital&target_id=$H")
   echo "$R" | jq_ "d.alerts.length>=1 && typeof d.alerts[0].payload==='object' && d.alerts[0].payload.urgency_level==='Critical'" && pass "GET /api/alerts returns parsed payload" || fail "alerts list" "$R"
   check "guardian.html polls every 2s" bash -c "grep -q '2000' public/js/app.js public/guardian.html && grep -q 'setInterval' public/guardian.html"
   check "hospital.html polls every 2s" bash -c "grep -q '2000' public/hospital.html && grep -q 'setInterval' public/hospital.html"
-  R=$(post "/api/sessions/$SID/arrive" '{}')
+  R=$(post "/api/sessions/$SID/arrive" "{\"key\":\"$KEY\"}")
   echo "$R" | jq_ "d.status==='arrived'" && pass "arrive sets arrived" || fail "arrive" "$R"
-  R=$(get "/api/sessions/$SID")
+  R=$(get "/api/sessions/$SID?key=$KEY")
   echo "$R" | jq_ "d.status==='arrived' && d.closed_at && d.timeline.some(t=>t.step==='arrived')" && pass "session arrived + timeline has arrival" || fail "session arrived" "$R"
 }
 
@@ -130,7 +137,7 @@ phase4() {
 phase5() {
   check "README has setup/env/demo script/limitations" bash -c "grep -qi 'setup' README.md && grep -q 'ANTHROPIC_API_KEY' README.md && grep -qi 'demo script' README.md && grep -qi 'limitations' README.md && grep -qi 'decisions' README.md"
   check "no .env committed; .env.example committed" bash -c "! git ls-files | grep -qx '.env' && git ls-files | grep -qx '.env.example'"
-  check "footer disclaimer on assess screen" grep -q "does not replace emergency services" public/index.html
+  check "footer disclaimer on assess screen" grep -q "does not replace emergency services" public/emergency.html
   check "tel:112 on every page" bash -c "for f in public/*.html; do grep -q 'tel:112' \$f || exit 1; done"
   check "clean run: fresh install + seed + test (scripts/clean-run.sh)" bash scripts/clean-run.sh
 }

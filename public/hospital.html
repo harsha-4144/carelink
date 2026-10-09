@@ -8,67 +8,129 @@
 </head>
 <body>
 <header class="topbar">
-  <a class="brand" href="/">CARELINK AI</a>
+  <a class="brand" href="/">CARELINK<span>AI</span></a>
+  <nav id="nav" class="nav" aria-label="Account"></nav>
   <span class="amb">Ambulance: 108</span>
   <a class="call" href="tel:112">Call 112</a>
 </header>
 <noscript><div class="banner">CARELINK needs JavaScript. If this is an emergency, call 112.</div></noscript>
 <div id="error-banner" class="banner" role="alert" hidden></div>
 <main class="wide">
-  <h1 id="h-title">Hospital dashboard</h1>
-  <div id="h-pick" hidden><p>Choose a hospital:</p><div id="h-pick-list" class="row"></div></div>
-  <div id="h-content" hidden>
-    <p class="note">Incoming patients refresh every 2 seconds. Alerts are in-app and simulated.</p>
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>Received</th><th>Urgency</th><th>Specialty</th><th>ETA</th><th>Patient summary</th></tr></thead>
-        <tbody id="h-rows"></tbody>
-      </table>
-      <div id="h-empty" class="empty">No incoming patients yet.</div>
+  <div class="page-head">
+    <div><h1 id="h-title">Hospital dashboard</h1><p><span class="dot"></span>Live queue · refreshes every 2 seconds</p></div>
+    <div class="row" style="margin:0">
+      <label class="switch" title="Counts the ICU in patient matching"><input type="checkbox" id="icu-toggle"> ICU available</label>
+      <label class="switch"><input type="checkbox" id="sound-toggle" checked> Sound</label>
     </div>
   </div>
+  <div class="grid four" style="margin-bottom:1rem">
+    <div class="stat"><b id="st-active">0</b><span>Incoming now</span></div>
+    <div class="stat hot"><b id="st-critical">0</b><span>Critical incoming</span></div>
+    <div class="stat"><b id="st-arrived">0</b><span>Arrived today</span></div>
+    <div class="stat"><b id="st-total">0</b><span>Total alerts</span></div>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Received</th><th>Urgency</th><th>Patient</th><th>ETA</th><th>Status</th><th>Action</th></tr></thead>
+      <tbody id="h-rows"></tbody>
+    </table>
+    <div id="h-empty" class="empty"><b>No incoming patients</b>New alerts appear here instantly, with a sound for critical cases.</div>
+  </div>
 </main>
+
 <script src="/js/api.js"></script>
+<script src="/js/nav.js"></script>
 <script>
-const hospitalId = new URLSearchParams(location.search).get('hospital');
 const seen = new Set();
 let firstLoad = true;
+let etaTargets = [];
+
+function beep() {
+  if (!$('sound-toggle').checked) return;
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination); o.frequency.value = 880; g.gain.value = 0.15;
+    o.start(); o.stop(ctx.currentTime + 0.25);
+    setTimeout(() => ctx.close(), 600);
+  } catch (e) { /* audio blocked until the user interacts: ignore */ }
+}
+
+function actions(a) {
+  if (a.session_status === 'arrived') return '<span class="pill arrived">Completed</span>';
+  const btn = (act, label, cls = 'secondary') => `<button type="button" class="${cls} small" data-act="${act}" data-id="${a.id}" data-session="${a.session_id}">${label}</button>`;
+  if (a.status === 'new') return btn('accepted', 'Accept', 'primary');
+  if (a.status === 'accepted') return btn('preparing', 'Preparing');
+  if (a.status === 'preparing') return btn('ready', 'Ready');
+  return btn('arrived', 'Patient arrived', 'primary');
+}
 
 function row(a, isNew) {
   const p = a.payload;
-  return '<tr class="' + (isNew ? 'flash' : '') + '"><td>' + esc(fmtTime(a.sent_at)) + '</td><td>' + badge(p.urgency_level) + '</td><td>' + esc(p.needed_specialty) +
-    '</td><td>' + esc(p.eta_min) + ' min</td><td>' + esc(p.patient_summary) + '<br><span class="note">' + esc(p.urgency_reason) + ' · <a href="' + mapsLink(p.location.lat, p.location.lng) + '" target="_blank" rel="noopener">location</a></span></td></tr>';
+  const done = a.session_status === 'arrived';
+  const status = done ? 'arrived' : a.status;
+  return `<tr class="${isNew ? 'flash' : ''}" style="${done ? 'opacity:.55' : ''}"><td>${esc(fmtTime(a.sent_at))}</td><td>${badge(p.urgency_level)}<br><span class="note">${esc(p.needed_specialty)}</span></td>
+    <td>${esc(p.patient_summary)}<br><span class="note">${esc(p.urgency_reason)} · <a href="${mapsLink(p.location.lat, p.location.lng)}" target="_blank" rel="noopener">location</a></span></td>
+    <td>${done ? '-' : `<b data-eta="${new Date(a.sent_at).getTime() + p.eta_min * 60000}">${esc(p.eta_min)} min</b>`}</td>
+    <td><span class="pill ${esc(status)}">${esc(status)}</span></td><td><div class="actions">${actions(a)}</div></td></tr>`;
 }
 
+function tickEta() {
+  document.querySelectorAll('[data-eta]').forEach((el) => {
+    const left = Math.max(0, Math.round((Number(el.dataset.eta) - Date.now()) / 1000));
+    el.textContent = left === 0 ? 'due now' : String(Math.floor(left / 60)).padStart(2, '0') + ':' + String(left % 60).padStart(2, '0');
+  });
+}
+
+let hospitalId = null;
 async function poll() {
   try {
-    const r = await api('GET', '/api/alerts?target_type=hospital&target_id=' + encodeURIComponent(hospitalId));
-    $('h-rows').innerHTML = r.alerts.map((a) => row(a, !firstLoad && !seen.has(a.id))).join('');
-    r.alerts.forEach((a) => seen.add(a.id));
-    $('h-empty').hidden = r.alerts.length > 0;
+    const [info, r] = await Promise.all([
+      api('GET', '/api/hospital/me', undefined, { quiet: true }),
+      api('GET', `/api/alerts?target_type=hospital&target_id=${hospitalId}`, undefined, { quiet: true }),
+    ]);
+    $('st-active').textContent = info.stats.active; $('st-critical').textContent = info.stats.critical_active;
+    $('st-arrived').textContent = info.stats.arrived; $('st-total').textContent = info.stats.total;
+    if (document.activeElement !== $('icu-toggle')) $('icu-toggle').checked = info.hospital.icu_available;
+    $('icu-toggle').disabled = !info.hospital.emergency_facilities.includes('icu');
+    const alerts = r.alerts.slice().sort((a, b) => (a.session_status === 'arrived') - (b.session_status === 'arrived') || b.id - a.id);
+    $('h-rows').innerHTML = alerts.map((a) => row(a, !firstLoad && !seen.has(a.id))).join('');
+    for (const a of alerts) {
+      if (!firstLoad && !seen.has(a.id)) {
+        toast(`Incoming ${a.payload.urgency_level}: ${a.payload.patient_summary.split(',')[0]} (${a.payload.eta_min} min)`, a.payload.urgency_level === 'Critical' ? 'crit' : '');
+        if (a.payload.urgency_level === 'Critical') beep();
+      }
+      seen.add(a.id);
+    }
+    $('h-empty').hidden = alerts.length > 0;
     firstLoad = false;
-  } catch (e) { /* banner shown; keep polling */ }
+    tickEta();
+    clearError();
+  } catch (e) { showError(e.message); }
 }
 
-async function init() {
-  if (!hospitalId) {
-    $('h-pick').hidden = false;
-    try {
-      const r = await api('GET', '/api/hospitals');
-      $('h-pick-list').innerHTML = r.hospitals.map((h) => '<a class="btn secondary" href="?hospital=' + h.id + '">' + esc(h.name) + '</a>').join('');
-    } catch (e) { /* banner shown */ }
-    return;
-  }
-  $('h-content').hidden = false;
+$('h-rows').addEventListener('click', async (e) => {
+  const b = e.target.closest('button[data-act]');
+  if (!b) return;
+  b.disabled = true;
   try {
-    const r = await api('GET', '/api/hospitals');
-    const h = r.hospitals.find((x) => String(x.id) === hospitalId);
-    if (h) $('h-title').textContent = h.name + ': incoming patients';
-  } catch (e) { /* banner shown */ }
+    if (b.dataset.act === 'arrived') await api('POST', `/api/sessions/${b.dataset.session}/arrive`, {});
+    else await api('POST', `/api/alerts/${b.dataset.id}/status`, { status: b.dataset.act });
+    await poll();
+  } catch (err) { b.disabled = false; }
+});
+
+$('icu-toggle').addEventListener('change', async () => {
+  try { await api('POST', '/api/hospital/icu', { icu_available: $('icu-toggle').checked }); toast($('icu-toggle').checked ? 'ICU marked available' : 'ICU marked full: patients will be matched elsewhere'); } catch (e) { poll(); }
+});
+
+requireLogin('hospital_staff').then((u) => {
+  hospitalId = u.hospital_id;
+  $('h-title').textContent = u.hospital_name;
   poll();
   setInterval(poll, 2000);
-}
-init();
+  setInterval(tickEta, 1000);
+});
 </script>
 </body>
 </html>

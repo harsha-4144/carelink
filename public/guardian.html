@@ -3,48 +3,73 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>CARELINK AI: Guardian view</title>
+<title>CARELINK AI: Guardian</title>
 <link rel="stylesheet" href="/css/app.css">
 </head>
 <body>
 <header class="topbar">
-  <a class="brand" href="/">CARELINK AI</a>
+  <a class="brand" href="/">CARELINK<span>AI</span></a>
+  <nav id="nav" class="nav" aria-label="Account"></nav>
   <span class="amb">Ambulance: 108</span>
   <a class="call" href="tel:112">Call 112</a>
 </header>
 <noscript><div class="banner">CARELINK needs JavaScript. If this is an emergency, call 112.</div></noscript>
 <div id="error-banner" class="banner" role="alert" hidden></div>
-<main>
-  <h1>Guardian alert</h1>
-  <div id="g-empty" class="empty" hidden>No emergency selected. Open this page from the link shown after the alert (it ends with ?session=ID).</div>
-  <div id="g-content" hidden>
-    <div class="card"><div id="g-urgency"></div><h2 id="g-patient">Waiting for details…</h2><p id="g-patient-info" class="note"></p></div>
-    <div class="card">
-      <h3>Heading to</h3><p id="g-hospital">Not decided yet</p>
-      <p>Arrival in</p><div class="big" id="g-eta">--:--</div>
-      <p id="g-status" class="note"></p>
-      <p><a id="g-location" href="#" target="_blank" rel="noopener">Open patient location on map</a></p>
+<main class="wide">
+  <!-- Live view for one emergency (?session=ID, optional &key=) -->
+  <div id="live-view" hidden>
+    <div class="page-head"><div><h1>Live emergency</h1><p><span class="dot"></span><span id="g-status">Connecting…</span></p></div><a href="/guardian.html" id="g-back" class="btn secondary" hidden>All my people</a></div>
+    <div id="g-denied" class="panel empty" hidden><b>You can't view this emergency</b>Log in with the guardian account of this patient, or open the link from the alert.<div class="row" style="justify-content:center"><a class="btn primary" href="/login.html">Log in</a></div></div>
+    <div id="g-body">
+      <div class="grid two">
+        <div class="panel"><div id="g-urgency"></div><h2 id="g-patient" style="margin-top:.5rem">Waiting for details…</h2><p id="g-patient-info" class="muted"></p>
+          <p class="note" id="g-reason"></p></div>
+        <div class="panel"><h3>Heading to</h3><p id="g-hospital" style="font-weight:700">Not decided yet</p>
+          <p class="note" style="margin:0">Estimated arrival in</p><div class="big" id="g-eta">--:--</div>
+          <div class="row"><a id="g-location" class="btn secondary small" href="#" target="_blank" rel="noopener">Patient location</a><a id="g-call" class="btn secondary small" href="#" hidden>Call hospital</a></div></div>
+      </div>
+      <div class="panel" style="margin-top:1rem"><h3>Hospital readiness</h3><div class="stepper" id="g-stepper"></div></div>
+      <div class="panel" style="margin-top:1rem"><h3>Timeline</h3><div id="g-timeline"></div></div>
     </div>
-    <div class="card"><h3>Timeline</h3><div id="g-timeline"></div></div>
+  </div>
+
+  <!-- Overview of linked patients -->
+  <div id="list-view" hidden>
+    <div class="page-head"><div><h1 id="gl-hello">Your people</h1><p>Live status of the patients who added you as their guardian.</p></div></div>
+    <div id="gl-patients" class="grid two"><div class="panel"><div class="skeleton"></div><div class="skeleton"></div></div></div>
   </div>
 </main>
+
 <script src="/js/api.js"></script>
+<script src="/js/nav.js"></script>
 <script>
-const sessionId = new URLSearchParams(location.search).get('session');
+const qs = new URLSearchParams(location.search);
+const sessionId = qs.get('session');
+const key = qs.get('key');
 let arrivalAt = null;
 let arrived = false;
+const STEPS = [['Alert sent', 'new'], ['Accepted', 'accepted'], ['Preparing', 'preparing'], ['Ready', 'ready'], ['Arrived', 'arrived']];
 
-function render(s) {
+function renderStepper(s) {
+  const reached = s.status === 'arrived' ? 4 : (s.hospital_status ? STEPS.findIndex((x) => x[1] === s.hospital_status) : -1);
+  $('g-stepper').innerHTML = STEPS.map((x, i) => `<span class="${i < reached || (i === reached && s.status === 'arrived') ? 'on' : i === reached ? 'cur' : ''}">${x[0]}</span>`).join('');
+}
+
+function renderLive(s) {
   $('g-urgency').innerHTML = badge(s.urgency_level);
   $('g-patient').textContent = s.patient ? s.patient.name : 'Unidentified patient';
-  $('g-patient-info').textContent = s.patient ? 'Blood group ' + s.patient.blood_group + ' · Allergies: ' + s.patient.allergies + ' · Conditions: ' + s.patient.conditions : 'The patient has not been identified yet.';
+  $('g-patient-info').textContent = s.patient ? `Blood group ${s.patient.blood_group || '?'} · Allergies: ${s.patient.allergies} · Conditions: ${s.patient.conditions}` : 'The patient has not been identified yet.';
+  $('g-reason').textContent = s.urgency_reason || '';
   $('g-hospital').textContent = s.hospital ? s.hospital.name : 'Not decided yet';
   $('g-location').href = mapsLink(s.lat, s.lng);
+  if (s.hospital && s.hospital.phone) { $('g-call').href = 'tel:' + s.hospital.phone; $('g-call').hidden = false; }
   $('g-timeline').innerHTML = renderTimeline(s.timeline);
   arrived = s.status === 'arrived';
   const a = s.alerts.find((x) => x.target_type === 'hospital');
   arrivalAt = a && s.eta_min != null ? new Date(a.sent_at).getTime() + s.eta_min * 60000 : null;
-  $('g-status').textContent = arrived ? 'The patient has arrived at the hospital.' : (a ? 'Alert sent. Ambulance en route.' : 'Waiting for the bystander to send the alert…');
+  const hs = { new: 'Alert delivered. Waiting for the hospital to accept.', accepted: 'The hospital accepted the patient.', preparing: 'The hospital is preparing for arrival.', ready: 'The hospital is ready.' }[s.hospital_status];
+  $('g-status').textContent = arrived ? 'The patient has arrived at the hospital.' : (hs || 'Waiting for the bystander to send the alert…');
+  renderStepper(s);
   tick();
 }
 
@@ -55,18 +80,61 @@ function tick() {
   $('g-eta').textContent = String(Math.floor(left / 60)).padStart(2, '0') + ':' + String(left % 60).padStart(2, '0');
 }
 
-async function poll() {
-  try { render(await api('GET', '/api/sessions/' + encodeURIComponent(sessionId))); } catch (e) { /* banner shown; keep polling */ }
+async function pollLive() {
+  try {
+    renderLive(await api('GET', `/api/sessions/${encodeURIComponent(sessionId)}${key ? '?key=' + encodeURIComponent(key) : ''}`, undefined, { quiet: true }));
+    clearError();
+  } catch (e) {
+    if (e.status === 401 || e.status === 403) { $('g-denied').hidden = false; $('g-body').hidden = true; $('g-status').textContent = 'Access denied'; }
+    else showError(e.message);
+  }
 }
 
-if (!sessionId) {
-  $('g-empty').hidden = false;
-} else {
-  $('g-content').hidden = false;
-  poll();
-  setInterval(poll, 2000);
-  setInterval(tick, 1000);
+// ----- overview -----
+const seenActive = new Set();
+let firstOverview = true;
+
+function sessionLine(s) {
+  const active = s.status !== 'arrived' && s.status !== 'triggered';
+  return `<div class="card" style="${active ? 'border-color:var(--red)' : ''}">${active ? '<span class="pill new">ACTIVE EMERGENCY</span> ' : ''}${badge(s.urgency_level)}
+    <b>${esc(s.hospital_name || 'No hospital yet')}</b><br><span class="note">${esc(fmtDate(s.created_at))} · ${esc(s.status)}${s.hospital_status ? ' · hospital ' + esc(s.hospital_status) : ''}</span>
+    <div class="row"><a class="btn ${active ? 'primary' : 'secondary'} small" href="/guardian.html?session=${s.id}">${active ? 'Open live view' : 'View'}</a></div></div>`;
 }
+
+async function pollOverview() {
+  try {
+    const r = await api('GET', '/api/guardian/overview', undefined, { quiet: true });
+    $('gl-patients').innerHTML = r.patients.map((p) => `<div class="panel"><h2>${esc(p.name)} <span class="pill">${esc(p.relation || 'guardian')}</span></h2>
+      <p class="muted">${esc(p.carelink_id)} · Blood ${esc(p.blood_group || '?')} · ${esc(p.conditions)}<br>Allergies: ${esc(p.allergies)}</p>
+      ${p.sessions.length ? p.sessions.slice(0, 3).map(sessionLine).join('') : '<p class="empty"><b>All quiet</b>No emergencies recorded.</p>'}</div>`).join('')
+      || '<div class="panel empty"><b>No linked patients yet</b>Ask your family member to add your email as a guardian in their CARELINK profile.</div>';
+    for (const p of r.patients) for (const s of p.sessions) {
+      if (s.status !== 'arrived' && s.status !== 'triggered') {
+        if (!firstOverview && !seenActive.has(s.id)) toast(`Emergency: ${p.name} is being taken to ${s.hospital_name || 'a hospital'}`, 'crit');
+        seenActive.add(s.id);
+      }
+    }
+    firstOverview = false;
+    clearError();
+  } catch (e) { showError(e.message); }
+}
+
+async function init() {
+  if (sessionId) {
+    $('live-view').hidden = false;
+    if (!key) { const u = await requireLogin('guardian', 'patient'); $('g-back').hidden = u.role !== 'guardian'; }
+    pollLive();
+    setInterval(pollLive, 2000);
+    setInterval(tick, 1000);
+    return;
+  }
+  const u = await requireLogin('guardian');
+  $('gl-hello').textContent = 'Hello, ' + u.name.split(' ')[0];
+  $('list-view').hidden = false;
+  pollOverview();
+  setInterval(pollOverview, 2000);
+}
+init();
 </script>
 </body>
 </html>

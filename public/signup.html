@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CARELINK AI: Sign up</title>
+<link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="/">CARELINK<span>AI</span></a>
+  <nav id="nav" class="nav" aria-label="Account"></nav>
+  <span class="amb">Ambulance: 108</span>
+  <a class="call" href="tel:112">Call 112</a>
+</header>
+<noscript><div class="banner">CARELINK needs JavaScript. If this is an emergency, call 112.</div></noscript>
+<div id="error-banner" class="banner" role="alert" hidden></div>
+<main class="narrow">
+  <div class="panel" style="margin-top:1.5rem">
+    <h1>Create an account</h1>
+    <div class="seg" role="tablist">
+      <button type="button" role="tab" data-role="guardian" aria-selected="true">Guardian</button>
+      <button type="button" role="tab" data-role="hospital_staff" aria-selected="false">Hospital staff</button>
+    </div>
+    <p class="note" id="role-hint"></p>
+    <form id="signup-form" novalidate>
+      <label for="name">Full name</label><input id="name" type="text" autocomplete="name" required>
+      <label for="email">Email</label><input id="email" type="email" autocomplete="email" required>
+      <label for="phone">Phone (optional)</label><input id="phone" type="tel" autocomplete="tel">
+      <label for="password">Password (8+ characters)</label><input id="password" type="password" autocomplete="new-password" minlength="8" required>
+      <div id="staff-fields" hidden>
+        <label for="hospital">Your hospital</label><select id="hospital"></select>
+        <label for="staff-code">Staff access code</label><input id="staff-code" type="password" autocomplete="off">
+        <p class="note">Hackathon demo code: <code>HACKHERS</code></p>
+      </div>
+      <p id="signup-msg" class="note" role="alert" style="color:var(--red-dark)"></p>
+      <div class="row"><button type="submit" id="signup-btn" class="primary" style="width:100%">Create account</button></div>
+    </form>
+    <p class="note" style="margin-top:1rem">Patient? <a href="/register.html">Register for a CARELINK ID</a> · Already have an account? <a href="/login.html">Log in</a></p>
+  </div>
+</main>
+
+<script src="/js/api.js"></script>
+<script src="/js/nav.js"></script>
+<script>
+let role = new URLSearchParams(location.search).get('role') === 'hospital_staff' ? 'hospital_staff' : 'guardian';
+
+const HINTS = {
+  guardian: 'Use the email your family member added as your guardian email in their CARELINK profile. We link you to them automatically.',
+  hospital_staff: 'For emergency department staff. You will see the incoming patient queue for your hospital only.',
+};
+
+function setRole(r) {
+  role = r;
+  document.querySelectorAll('.seg button').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.role === r)));
+  $('staff-fields').hidden = r !== 'hospital_staff';
+  $('role-hint').textContent = HINTS[r];
+}
+document.querySelectorAll('.seg button').forEach((b) => b.addEventListener('click', () => setRole(b.dataset.role)));
+setRole(role);
+
+api('GET', '/api/hospitals').then((r) => {
+  $('hospital').innerHTML = r.hospitals.map((h) => `<option value="${h.id}">${esc(h.name)}</option>`).join('');
+}).catch(() => {});
+
+$('signup-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  $('signup-msg').textContent = '';
+  $('signup-btn').disabled = true;
+  try {
+    const r = await api('POST', '/api/auth/signup', {
+      role, name: $('name').value.trim(), email: $('email').value.trim(), phone: $('phone').value.trim(), password: $('password').value,
+      hospital_id: Number($('hospital').value), staff_code: $('staff-code').value,
+    }, { quiet: true });
+    location.href = HOME_BY_ROLE[r.user.role];
+  } catch (err) {
+    $('signup-msg').textContent = err.message;
+    $('signup-btn').disabled = false;
+  }
+});
+</script>
+</body>
+</html>
