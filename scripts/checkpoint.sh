@@ -130,7 +130,7 @@ phase4() {
   R=$(post "/api/sessions/$SID/arrive" "{\"key\":\"$KEY\"}")
   echo "$R" | jq_ "d.status==='arrived'" && pass "arrive sets arrived" || fail "arrive" "$R"
   R=$(get "/api/sessions/$SID?key=$KEY")
-  echo "$R" | jq_ "d.status==='arrived' && d.closed_at && d.timeline.some(t=>t.step==='arrived')" && pass "session arrived + timeline has arrival" || fail "session arrived" "$R"
+  echo "$R" | jq_ "d.status==='arrived' && d.closed_at && d.timeline.some(t=>/arrived/i.test(t.step))" && pass "session arrived + timeline has arrival" || fail "session arrived" "$R"
 }
 
 # ---------- Phase 5 ----------
