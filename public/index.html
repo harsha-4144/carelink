@@ -3,6 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#dc2626">
 <title>CARELINK AI</title>
 <meta name="description" content="When the patient can't speak, CARELINK speaks for them. Emergency identification, triage, hospital matching and alerts in one tap.">
 <link rel="stylesheet" href="/css/app.css">
@@ -85,7 +88,16 @@
   </div>
 </section>
 
-<footer class="site">CARELINK AI · HackHERS 2.0 · Synthetic demo data · Not a medical device. Urgency is an advisory estimate and does not replace emergency services.</footer>
+<section class="section" style="padding-top:0">
+  <h2>Questions people ask</h2>
+  <div class="grid two" style="margin-top:1rem">
+    <details class="panel"><summary><b>What if the patient has no CARELINK ID?</b></summary><p class="muted" style="margin-top:.5rem">The bystander can skip identification. The hospital still gets the alert, and staff can link the patient later when someone identifies them, which then alerts the family.</p></details>
+    <details class="panel"><summary><b>What if I press SOS by accident?</b></summary><p class="muted" style="margin-top:.5rem">There is a 5 second cancel window, and a "False alarm" button afterwards that tells the hospital and guardians.</p></details>
+    <details class="panel"><summary><b>What if the hospital cannot take the patient?</b></summary><p class="muted" style="margin-top:.5rem">Staff decline with a reason, the caller is shown the next best hospitals, and guardians follow the new hospital.</p></details>
+    <details class="panel"><summary><b>Who can see my data?</b></summary><p class="muted" style="margin-top:.5rem">Only an emergency summary, only during an emergency, and every lookup shows in your Access log. <a href="/about.html">Read how it works</a>.</p></details>
+  </div>
+</section>
+<footer class="site"><a href="/about.html">How it works</a> · <a href="/outbox.html">SMS log</a> · CARELINK AI · HackHERS 2.0 · Synthetic demo data · Not a medical device. Urgency is an advisory estimate and does not replace emergency services.</footer>
 <script src="/js/api.js"></script>
 <script src="/js/nav.js"></script>
 </body>

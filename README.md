@@ -42,6 +42,23 @@ rate limits, role checks on every dashboard API. An emergency session can be rea
 (`key`), the patient, a linked guardian, or staff of the chosen hospital. Emergency start, identify, triage, match,
 route and alert stay public by design (break-glass: the bystander has no account).
 
+## Presenting through a temporary tunnel (HTTPS)
+
+Camera (QR), microphone and location only work on `localhost` or HTTPS, so for judges' phones use a tunnel:
+
+```
+npm run seed && npm start                      # terminal 1
+cloudflared tunnel --url http://localhost:3000 # terminal 2: prints an https://....trycloudflare.com URL
+```
+
+Open that URL on your phone and share it (or show it as a QR code). Tips: set `STAFF_CODE` if you do not want strangers
+signing up as hospital staff; set `DEMO_MODE=false` to hide the demo logins and the SMS log; run `npm run seed` to reset
+everything before each judge. Fallbacks if something fails live: `MOCK_MODE=true` (no network at all), type the CARELINK ID
+instead of scanning, and tap *Call 112*.
+
+Extra pages: `/about.html` (how it works and what is simulated), `/outbox.html` (simulated SMS log).
+Judge preparation: [docs/JUDGES_QA.md](docs/JUDGES_QA.md).
+
 ## Environment variables
 
 | Variable | Default | Meaning |
@@ -52,12 +69,15 @@ route and alert stay public by design (break-glass: the bystander has no account
 | `MOCK_MODE` | false | `true` = never touch the network (no OSRM, no LLM). Tests use it |
 | `ANTHROPIC_API_KEY` | empty | If set (and not MOCK_MODE) the LLM may refine the triage level. It can never lower a Critical result. 5 s timeout, any failure falls back to rules |
 | `ANTHROPIC_MODEL` | `claude-haiku-5-5` | Model for the refinement |
+| `DEMO_MODE` | true | `false` hides the demo-account buttons and the SMS log |
+| `STAFF_CODE` | HACKHERS | Access code for hospital staff sign-up |
+| `RATE_LIMIT` | on | `off` disables the login and ID-lookup rate limits (tests, browser scripts) |
 | `ENABLE_FACE` | false | Optional face recognition (see Phase 6 notes below) |
 
 ## Demo script (under 2 minutes)
 
 0. (Optional) Log in as `kiran@demo.test` on a second window (hospital) and `rohan@demo.test` on a third (guardian, Asha's family).
-1. Open `/emergency.html` and tap **SOS** (or say "emergency" in a browser that supports speech recognition).
+1. Open `/emergency.html` and tap **SOS** (5 second cancel window, then it starts) (or say "emergency" in a browser that supports speech recognition).
 2. Enter `CL-1001`, or scan the QR from `/register.html`.
 3. Tap **Unconscious** and **Chest pain**, then **Assess urgency**.
 4. Show the **Critical** result with its reason and the "AI estimate, not a diagnosis" line.
@@ -65,6 +85,10 @@ route and alert stay public by design (break-glass: the bystander has no account
 6. Pick the first one (Heartline Cardiac Centre) and show the route and ETA.
 7. **Alert hospital and guardian**, then watch the hospital queue and the guardian view update live. At the hospital tap Accept, Preparing, Ready: the guardian stepper follows.
 8. Tap **Patient arrived** (bystander or hospital) and show the timeline. The patient's history shows it too.
+
+Real-world moments worth showing: *False alarm*, refreshing the page and tapping *Resume emergency*, the hospital pressing
+**Decline** (the bystander is re-matched), an unknown patient identified later by the hospital (guardians then alerted), the
+guardian pressing **I'm on my way** (hospital and bystander see it), the bell notifications, the patient's **Access log**, and `/outbox.html`.
 
 Reset between runs with `npm run seed` (restart not required).
 
@@ -93,6 +117,11 @@ threshold. Registration stores a descriptor only when the patient ticks the face
 (default) `/api/identify` with method `face` returns `{found:false, reason:"face_disabled"}`.
 The server side is covered by `test/face.test.js`; the in-browser camera/model code could not be exercised in the
 headless build environment, so treat it as untested on a real camera.
+
+## Tests
+
+`npm test` (42 tests). `scripts/e2e-flows.js` is a real-browser walk-through of all personas and the situations above
+(needs Playwright, installed on demand, see the header of the script).
 
 ## Known limitations
 

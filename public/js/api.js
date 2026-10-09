@@ -66,7 +66,7 @@ function fmtDate(iso) {
 
 function renderTimeline(items) {
   if (!items || !items.length) return '<p class="empty">No events yet.</p>';
-  return '<ul class="timeline">' + items.map((t) => `<li><time>${esc(fmtTime(t.at))}</time>${esc(t.step)}</li>`).join('') + '</ul>';
+  return '<ul class="timeline">' + items.map((t) => `<li><time>${esc(fmtTime(t.at))}</time>${t.actor && t.actor !== 'System' ? `<span class="actor ${esc(String(t.actor).split(' ')[0])}">${esc(t.actor)}</span>` : ''}${esc(t.step)}</li>`).join('') + '</ul>';
 }
 
 function mapsLink(lat, lng) {

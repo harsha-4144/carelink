@@ -171,3 +171,13 @@ test('hospital arrival notifies guardians; guardian alerts respect withdrawn con
   const notes = (await call('GET', '/api/notifications', null, await login('rohan@demo.test'))).json.notifications;
   assert.ok(notes.some((n) => n.kind === 'arrived' && n.session_id === em2.session_id));
 });
+
+test('a hospital that declined is not offered again', async () => {
+  const em = await emergency();
+  await alertHospital(em, 2);
+  const { staff, alert } = await hospAlertId(2, em.session_id);
+  await call('POST', `/api/alerts/${alert.id}/decline`, { reason: 'Full' }, staff);
+  const m = (await call('GET', `/api/hospitals/match?session_id=${em.session_id}`)).json.hospitals;
+  assert.strictEqual(m.length, 3);
+  assert.ok(!m.some((h) => h.id === 2));
+});

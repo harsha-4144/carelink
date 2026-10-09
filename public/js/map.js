@@ -18,6 +18,21 @@ const CareMap = (() => {
     return true;
   }
 
+  // Before a hospital is chosen: the patient and the candidate hospitals.
+  function showCandidates(elementId, patient, hospitals) {
+    if (typeof L === 'undefined') return false;
+    if (timer) clearInterval(timer);
+    if (map) { map.remove(); map = null; }
+    map = L.map(elementId);
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' }).addTo(map);
+    const pts = [[patient.lat, patient.lng]];
+    L.marker(pts[0]).addTo(map).bindPopup('Patient');
+    hospitals.forEach((h, i) => { L.circleMarker([h.lat, h.lng], { radius: 9, color: '#2563eb', fillColor: '#2563eb', fillOpacity: .85 }).addTo(map).bindTooltip(`${i + 1}. ${h.name}`); pts.push([h.lat, h.lng]); });
+    map.fitBounds(pts, { padding: [30, 30] });
+    setTimeout(() => map && map.invalidateSize(), 100);
+    return true;
+  }
+
   // A small ambulance drives the route on a loop so the ETA feels alive (purely visual).
   function animateAmbulance(geometry) {
     if (!geometry || geometry.length < 2 || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
@@ -34,5 +49,5 @@ const CareMap = (() => {
     }, 60);
   }
 
-  return { show };
+  return { show, showCandidates };
 })();

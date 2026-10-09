@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#dc2626">
+<title>CARELINK AI: How it works</title>
+<link rel="stylesheet" href="/css/app.css">
+<style>.flow{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center}.flow span{background:#fff;border:1px solid var(--line);border-radius:12px;padding:.5rem .8rem;font-weight:700}.flow i{color:var(--muted);font-style:normal}
+.arch{display:grid;gap:.8rem;grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}.arch div{background:#fff;border:2px solid var(--line);border-radius:14px;padding:.8rem}.arch b{display:block}</style>
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="/">CARELINK<span>AI</span></a>
+  <nav id="nav" class="nav" aria-label="Account"></nav>
+  <span class="amb">Ambulance: 108</span>
+  <a class="call" href="tel:112">Call 112</a>
+</header>
+<noscript><div class="banner">CARELINK needs JavaScript. If this is an emergency, call 112.</div></noscript>
+<div id="error-banner" class="banner" role="alert" hidden></div>
+<main class="wide">
+  <div class="page-head"><div><h1>How CARELINK works</h1><p>Everything a judge, hospital or patient might ask, in one page.</p></div></div>
+
+  <div class="panel"><h2>The emergency in seven steps</h2>
+    <div class="flow"><span>Identify</span><i>→</i><span>Assess</span><i>→</i><span>Match</span><i>→</i><span>Route</span><i>→</i><span>Alert</span><i>→</i><span>Prepare</span><i>→</i><span>Arrive</span></div>
+    <p class="note" style="margin-top:.8rem">The bystander needs no account. Patients, guardians and hospital staff each have a login and a dashboard; their actions feed back into the bystander's live screen.</p></div>
+
+  <div class="grid two" style="margin-top:1rem">
+    <div class="panel"><h2>Triage (rule engine)</h2>
+      <p><b>Critical</b> if the patient is not conscious or not breathing, or any of: unconscious, unresponsive, no pulse, cardiac arrest, severe bleeding, chest pain, collapsed, seizure, stroke, choking, overdose, head injury.</p>
+      <p><b>Urgent</b> for: fracture, burn, high fever, confusion, difficulty breathing, deep cut, severe pain, allergic reaction and similar.</p>
+      <p><b>Stable</b> otherwise. An optional AI model may refine the result, but it can <b>never lower a Critical rating</b>, has a 5 s timeout, and any failure falls back to the rules. It is an advisory estimate, not a diagnosis.</p></div>
+    <div class="panel"><h2>Hospital score (0 to 100)</h2>
+      <p>score = round(Σ weight × term), each term 0 to 1:</p>
+      <div class="table-wrap"><table><thead><tr><th></th><th>Stable</th><th>Urgent</th><th>Critical</th></tr></thead><tbody>
+      <tr><td><b>S</b> specialty match</td><td>20</td><td>30</td><td>25</td></tr>
+      <tr><td><b>F</b> facilities (ER, ICU, cath lab…)</td><td>10</td><td>20</td><td>25</td></tr>
+      <tr><td><b>E</b> ETA</td><td>20</td><td>25</td><td>35</td></tr>
+      <tr><td><b>D</b> distance</td><td>40</td><td>15</td><td>10</td></tr>
+      <tr><td><b>T</b> traffic</td><td>10</td><td>10</td><td>5</td></tr></tbody></table></div>
+      <p class="note" style="margin-top:.6rem">Critical and Urgent cases never go to a hospital without an emergency unit. ICU counts only if staff mark it available. A hospital that declines is not offered again.</p></div>
+  </div>
+
+  <div class="panel" style="margin-top:1rem"><h2>Real vs simulated (we are upfront)</h2>
+    <div class="table-wrap"><table><thead><tr><th>Part</th><th>Status</th></tr></thead><tbody>
+      <tr><td>Triage rules, hospital scoring, alerts, dashboards, accounts, access control</td><td><span class="pill ready">Real, tested</span></td></tr>
+      <tr><td>Routing and ETA</td><td><span class="pill ready">Real road routing (OSRM)</span> with straight-line fallback</td></tr>
+      <tr><td>Traffic</td><td><span class="pill preparing">Simulated multiplier by hour (no free live-traffic API)</span></td></tr>
+      <tr><td>SMS to guardians and hospitals</td><td><span class="pill preparing">Simulated</span>: see the <a href="/outbox.html">SMS log</a></td></tr>
+      <tr><td>Hospitals, patients, phone numbers</td><td><span class="pill preparing">Synthetic demo data</span></td></tr>
+      <tr><td>Face recognition</td><td><span class="pill">Optional, off by default</span></td></tr></tbody></table></div></div>
+
+  <div class="grid two" style="margin-top:1rem">
+    <div class="panel"><h2>Privacy and safety</h2>
+      <ul><li>Medical data only with the patient's consent; they can withdraw guardian alerts any time.</li>
+      <li>A QR code holds a random token, never medical data. Responders see only an emergency summary.</li>
+      <li>Every lookup is logged and visible to the patient in their <b>Access log</b>.</li>
+      <li>False alarms: a 5 second cancel window, a "False alarm" button that notifies everyone, and rate limits on lookups.</li>
+      <li>Passwords are hashed (scrypt); sessions use HttpOnly cookies; each API checks the caller's role.</li></ul></div>
+    <div class="panel"><h2>Architecture</h2>
+      <div class="arch"><div><b>Browser</b>Plain HTML, CSS, JS. Leaflet maps, camera QR, voice.</div><div><b>Express API</b>REST + role checks. Rule triage, scoring, routing.</div><div><b>SQLite</b>Patients, hospitals, sessions, alerts, notifications, outbox.</div><div><b>Services</b>OSRM routing, optional LLM refinement, notification fan-out.</div></div>
+      <p class="note" style="margin-top:.6rem">Dashboards poll every 2 s today. Production path: server-sent events, Postgres, a real SMS provider, hospital system (FHIR) integration.</p></div>
+  </div>
+</main>
+<footer class="site">CARELINK AI · HackHERS 2.0 · Not a medical device. Urgency is an advisory estimate and does not replace emergency services.</footer>
+<script src="/js/api.js"></script>
+<script src="/js/nav.js"></script>
+</body>
+</html>

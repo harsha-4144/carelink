@@ -3,6 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#dc2626">
 <title>CARELINK AI: Log in</title>
 <link rel="stylesheet" href="/css/app.css">
 </head>
@@ -29,7 +32,7 @@
     </form>
     <p class="note" style="margin-top:1rem">New here? <a href="/register.html">Register as a patient</a> · <a href="/signup.html?role=guardian">Guardian</a> · <a href="/signup.html?role=hospital_staff">Hospital staff</a></p>
   </div>
-  <div class="panel" style="margin-top:1rem">
+  <div class="panel" id="demo-box" style="margin-top:1rem" hidden>
     <h3>Demo accounts</h3>
     <p class="note">Tap one to log in (password <code>demo1234</code>). Synthetic data.</p>
     <div class="row" style="margin-top:.4rem">
@@ -69,6 +72,7 @@ $('login-form').addEventListener('submit', (e) => {
 });
 
 document.querySelectorAll('.demo').forEach((b) => b.addEventListener('click', () => doLogin(b.dataset.email, 'demo1234')));
+api('GET', '/api/health', undefined, { quiet: true }).then((h) => { $('demo-box').hidden = !h.demo_mode; }).catch(() => { $('demo-box').hidden = false; });
 loadUser().then((u) => { if (u) location.replace(HOME_BY_ROLE[u.role]); });
 </script>
 </body>

@@ -3,6 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#dc2626">
 <title>CARELINK AI: My dashboard</title>
 <link rel="stylesheet" href="/css/app.css">
 </head>
@@ -22,6 +25,7 @@
     <button type="button" role="tab" data-tab="profile" aria-selected="false">Medical profile</button>
     <button type="button" role="tab" data-tab="guardians" aria-selected="false">Guardians</button>
     <button type="button" role="tab" data-tab="history" aria-selected="false">History</button>
+    <button type="button" role="tab" data-tab="access" aria-selected="false">Access log</button>
   </div>
 
   <section id="pt-overview" class="tabpane">
@@ -76,6 +80,9 @@
 
   <section id="pt-history" class="tabpane" hidden>
     <div class="panel"><h2>Emergency history</h2><div id="h-list"><div class="skeleton"></div><div class="skeleton"></div></div></div>
+  </section>
+  <section id="pt-access" class="tabpane" hidden>
+    <div class="panel"><h2>Who looked at my emergency ID</h2><p class="note">Every lookup is recorded. If you did not expect one, tell your guardian or report it.</p><div id="a-list"><div class="skeleton"></div></div></div>
   </section>
 </main>
 
@@ -167,7 +174,13 @@ $('g-list').addEventListener('click', async (e) => {
 
 $('p-print').addEventListener('click', () => window.print());
 
-requireLogin('patient').then(() => { loadProfile().catch(() => {}); loadHistory().catch(() => {}); });
+async function loadAccess() {
+  const r = await api('GET', '/api/me/access-log');
+  $('a-list').innerHTML = r.entries.length ? r.entries.map((e) => `<div class="card"><b>${esc(e.step)}</b><br><span class="note">${esc(fmtDate(e.at))} · ${esc(e.actor)} · emergency #${e.session_id}</span></div>`).join('')
+    : '<p class="empty"><b>No lookups yet</b>Your ID has never been used in an emergency.</p>';
+}
+
+requireLogin('patient').then(() => { loadProfile().catch(() => {}); loadHistory().catch(() => {}); loadAccess().catch(() => {}); });
 </script>
 </body>
 </html>

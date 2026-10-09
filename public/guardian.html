@@ -3,7 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#dc2626">
 <title>CARELINK AI: Guardian</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
 <link rel="stylesheet" href="/css/app.css">
 </head>
 <body>
@@ -28,7 +32,13 @@
           <p class="note" style="margin:0">Estimated arrival in</p><div class="big" id="g-eta">--:--</div>
           <div class="row"><a id="g-location" class="btn secondary small" href="#" target="_blank" rel="noopener">Patient location</a><a id="g-call" class="btn secondary small" href="#" hidden>Call hospital</a></div></div>
       </div>
-      <div class="panel" style="margin-top:1rem"><h3>Hospital readiness</h3><div class="stepper" id="g-stepper"></div></div>
+      <div id="g-respond" class="panel" style="margin-top:1rem" hidden><h3>Your response</h3>
+        <p class="note">Let the hospital and the bystander know you have seen this.</p>
+        <div class="row"><button type="button" id="g-ack" class="secondary">I saw this</button><button type="button" id="g-omw" class="primary">I'm on my way</button></div>
+        <p id="g-ack-note" class="note" aria-live="polite"></p></div>
+      <div class="panel" style="margin-top:1rem"><h3>Hospital readiness</h3><div class="stepper" id="g-stepper"></div>
+        <div id="g-map-fallback" class="fallback" hidden>Map library failed to load.</div><div id="g-map" style="height:260px;border-radius:12px;margin-top:.6rem"></div>
+        <p class="note" id="g-caller"></p></div>
       <div class="panel" style="margin-top:1rem"><h3>Timeline</h3><div id="g-timeline"></div></div>
     </div>
   </div>
@@ -41,13 +51,17 @@
 </main>
 
 <script src="/js/api.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
 <script src="/js/nav.js"></script>
+<script src="/js/map.js"></script>
 <script>
 const qs = new URLSearchParams(location.search);
 const sessionId = qs.get('session');
 const key = qs.get('key');
 let arrivalAt = null;
 let arrived = false;
+let mapDrawn = false;
+let myAlert = null;
 const STEPS = [['Alert sent', 'new'], ['Accepted', 'accepted'], ['Preparing', 'preparing'], ['Ready', 'ready'], ['Arrived', 'arrived']];
 
 function renderStepper(s) {
@@ -70,6 +84,17 @@ function renderLive(s) {
   const hs = { new: 'Alert delivered. Waiting for the hospital to accept.', accepted: 'The hospital accepted the patient.', preparing: 'The hospital is preparing for arrival.', ready: 'The hospital is ready.' }[s.hospital_status];
   $('g-status').textContent = arrived ? 'The patient has arrived at the hospital.' : (hs || 'Waiting for the bystander to send the alert…');
   renderStepper(s);
+  if (!mapDrawn && s.hospital) {
+    mapDrawn = true;
+    const ok = CareMap.show('g-map', { lat: s.lat, lng: s.lng }, s.hospital, [[s.lat, s.lng], [s.hospital.lat, s.hospital.lng]]);
+    $('g-map-fallback').hidden = ok; $('g-map').hidden = !ok;
+  }
+  const cp = a && a.payload.caller;
+  $('g-caller').textContent = cp ? `On scene: ${cp.name || 'a bystander'}${cp.phone ? ' · ' + cp.phone : ''}` : '';
+  const live = !arrived && !s.cancelled && s.my_alert;
+  $('g-respond').hidden = !live;
+  if (s.my_alert) { myAlert = s.my_alert.id; $('g-ack-note').textContent = s.my_alert.ack_note === 'on_my_way' ? 'You told everyone you are on the way.' : s.my_alert.ack_note ? 'You acknowledged this alert.' : ''; }
+  if (s.cancelled) $('g-status').textContent = 'This emergency was cancelled (false alarm).';
   tick();
 }
 
@@ -79,6 +104,12 @@ function tick() {
   const left = Math.max(0, Math.round((arrivalAt - Date.now()) / 1000));
   $('g-eta').textContent = String(Math.floor(left / 60)).padStart(2, '0') + ':' + String(left % 60).padStart(2, '0');
 }
+
+async function respond(note) {
+  try { await api('POST', `/api/alerts/${myAlert}/ack`, { note }); toast(note === 'on_my_way' ? 'The hospital knows you are coming' : 'Acknowledged'); pollLive(); } catch (e) { /* banner */ }
+}
+$('g-ack').addEventListener('click', () => respond('acknowledged'));
+$('g-omw').addEventListener('click', () => respond('on_my_way'));
 
 async function pollLive() {
   try {

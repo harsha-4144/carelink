@@ -83,7 +83,7 @@ phase1() {
 
 # ---------- Phase 2 ----------
 phase2() {
-  for p in / /emergency.html /login.html /signup.html /register.html /patient.html /guardian.html /hospital.html; do
+  for p in / /emergency.html /login.html /signup.html /register.html /patient.html /guardian.html /hospital.html /about.html /outbox.html; do
     c=$(curl -s -o /dev/null -w '%{http_code}' "$BASE$p")
     [ "$c" = "200" ] && pass "GET $p 200" || fail "GET $p" "status $c"
   done

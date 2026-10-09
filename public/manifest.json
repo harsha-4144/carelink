@@ -1,0 +1,10 @@
+{
+  "name": "CARELINK AI",
+  "short_name": "CARELINK",
+  "description": "When the patient can't speak, CARELINK speaks for them.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0b1220",
+  "theme_color": "#dc2626",
+  "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

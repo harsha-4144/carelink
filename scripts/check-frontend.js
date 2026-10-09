@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 
 // ids created at runtime by the scripts themselves
-const DYNAMIC = new Set(['logout-btn', 'toast-host']);
+const DYNAMIC = new Set(['logout-btn', 'toast-host', 'bell-btn', 'bell-count', 'notif-panel']);
 
 const pub = path.join(__dirname, '..', 'public');
 const htmlFiles = fs.readdirSync(pub).filter((f) => f.endsWith('.html'));

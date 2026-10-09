@@ -43,7 +43,14 @@ function fullSession(id) {
 router.get('/sessions/:id', (req, res, next) => {
   try {
     guard(req, loadSession(req.params.id), req.query.key);
-    res.json(fullSession(req.params.id));
+    const full = fullSession(req.params.id);
+    // For a logged-in guardian: which alert row is theirs, so the page can offer "I'm on my way".
+    if (req.user && req.user.role === 'guardian') {
+      const mine = getDb().prepare(`SELECT a.id, a.ack_note FROM alerts a JOIN guardians g ON g.id = a.target_id
+        WHERE a.session_id = ? AND a.target_type = 'guardian' AND a.status != 'cancelled' AND g.user_id = ? ORDER BY a.id DESC LIMIT 1`).get(full.id, req.user.id);
+      full.my_alert = mine || null;
+    }
+    res.json(full);
   } catch (e) { next(e); }
 });
 

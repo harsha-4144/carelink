@@ -3,6 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#dc2626">
 <title>CARELINK AI: Hospital dashboard</title>
 <link rel="stylesheet" href="/css/app.css">
 </head>
@@ -26,7 +29,7 @@
   <div class="grid four" style="margin-bottom:1rem">
     <div class="stat"><b id="st-active">0</b><span>Incoming now</span></div>
     <div class="stat hot"><b id="st-critical">0</b><span>Critical incoming</span></div>
-    <div class="stat"><b id="st-arrived">0</b><span>Arrived today</span></div>
+    <div class="stat"><b id="st-arrived">0</b><span>Arrived</span></div>
     <div class="stat"><b id="st-total">0</b><span>Total alerts</span></div>
   </div>
   <div class="table-wrap">
@@ -38,12 +41,33 @@
   </div>
 </main>
 
+<dialog id="decline-dlg">
+  <form method="dialog" id="decline-form">
+    <h3>Cannot take this patient?</h3>
+    <p class="note">The caller sees your reason and is shown other hospitals.</p>
+    <label for="decline-reason">Reason</label>
+    <select id="decline-reason"><option>ICU full</option><option>Required specialist unavailable</option><option>Emergency unit at capacity</option><option>Equipment down</option></select>
+    <div class="row"><button type="submit" id="decline-ok" class="danger">Decline patient</button><button type="button" id="decline-cancel" class="secondary">Back</button></div>
+  </form>
+</dialog>
+<dialog id="link-dlg">
+  <form method="dialog" id="link-form">
+    <h3>Identify this patient</h3>
+    <p class="note">Enter the CARELINK ID once the patient or relatives identify them. Their guardians are alerted automatically.</p>
+    <label for="link-id">CARELINK ID</label>
+    <input id="link-id" type="text" placeholder="CL-1001" autocapitalize="characters" autocomplete="off">
+    <p id="link-msg" class="note" style="color:var(--red-dark)"></p>
+    <div class="row"><button type="submit" id="link-ok" class="primary">Link patient</button><button type="button" id="link-cancel" class="secondary">Back</button></div>
+  </form>
+</dialog>
+
 <script src="/js/api.js"></script>
 <script src="/js/nav.js"></script>
 <script>
 const seen = new Set();
 let firstLoad = true;
-let etaTargets = [];
+let lastSig = '';
+let target = null; // alert the open dialog refers to
 
 function beep() {
   if (!$('sound-toggle').checked) return;
@@ -56,23 +80,35 @@ function beep() {
   } catch (e) { /* audio blocked until the user interacts: ignore */ }
 }
 
+const isOpen = (a) => !['cancelled', 'declined'].includes(a.status) && a.session_status !== 'arrived';
+const rank = (a) => ({ Critical: 0, Urgent: 1 }[a.payload.urgency_level] ?? 2);
+const dueAt = (a) => new Date(a.sent_at).getTime() + a.payload.eta_min * 60000;
+
 function actions(a) {
-  if (a.session_status === 'arrived') return '<span class="pill arrived">Completed</span>';
-  const btn = (act, label, cls = 'secondary') => `<button type="button" class="${cls} small" data-act="${act}" data-id="${a.id}" data-session="${a.session_id}">${label}</button>`;
-  if (a.status === 'new') return btn('accepted', 'Accept', 'primary');
-  if (a.status === 'accepted') return btn('preparing', 'Preparing');
-  if (a.status === 'preparing') return btn('ready', 'Ready');
-  return btn('arrived', 'Patient arrived', 'primary');
+  if (!isOpen(a)) return '<span class="note">—</span>';
+  const id = `data-id="${a.id}" data-session="${a.session_id}"`;
+  const btn = (act, label, cls = 'secondary') => `<button type="button" class="${cls} small" data-act="${act}" ${id}>${label}</button>`;
+  const main = { new: btn('accepted', 'Accept', 'primary'), accepted: btn('preparing', 'Preparing'), preparing: btn('ready', 'Ready'), ready: btn('arrived', 'Patient arrived', 'primary') }[a.status];
+  const link = a.payload.patient_summary === 'Unidentified patient' ? btn('link', 'Identify patient') : '';
+  return `${main} ${link} ${btn('decline', 'Decline')}`;
+}
+
+function statusOf(a) {
+  if (a.status === 'cancelled') return 'cancelled';
+  if (a.status === 'declined') return 'declined';
+  return a.session_status === 'arrived' ? 'arrived' : a.status;
 }
 
 function row(a, isNew) {
   const p = a.payload;
-  const done = a.session_status === 'arrived';
-  const status = done ? 'arrived' : a.status;
-  return `<tr class="${isNew ? 'flash' : ''}" style="${done ? 'opacity:.55' : ''}"><td>${esc(fmtTime(a.sent_at))}</td><td>${badge(p.urgency_level)}<br><span class="note">${esc(p.needed_specialty)}</span></td>
-    <td>${esc(p.patient_summary)}<br><span class="note">${esc(p.urgency_reason)} · <a href="${mapsLink(p.location.lat, p.location.lng)}" target="_blank" rel="noopener">location</a></span></td>
-    <td>${done ? '-' : `<b data-eta="${new Date(a.sent_at).getTime() + p.eta_min * 60000}">${esc(p.eta_min)} min</b>`}</td>
-    <td><span class="pill ${esc(status)}">${esc(status)}</span></td><td><div class="actions">${actions(a)}</div></td></tr>`;
+  const open = isOpen(a);
+  const fam = (a.family || []).filter((f) => f.ack_note).map((f) => `${esc(f.guardian_name)} ${f.ack_note === 'on_my_way' ? 'is on the way' : 'saw the alert'}`).join(' · ');
+  const caller = p.caller ? `Caller: ${esc(p.caller.name || 'unnamed')}${p.caller.phone ? ` <a href="tel:${esc(p.caller.phone)}">${esc(p.caller.phone)}</a>` : ''}` : '';
+  return `<tr class="${isNew ? 'flash' : ''}" style="${open ? '' : 'opacity:.55'}"><td>${esc(fmtTime(a.sent_at))}</td><td>${badge(p.urgency_level)}<br><span class="note">${esc(p.needed_specialty)}</span></td>
+    <td>${esc(p.patient_summary)}<br><span class="note">${esc(p.urgency_reason)} · <a href="${mapsLink(p.location.lat, p.location.lng)}" target="_blank" rel="noopener">location</a></span>
+    ${caller ? `<br><span class="note">${caller}</span>` : ''}${fam ? `<br><span class="pill ready">${fam}</span>` : ''}${a.decline_reason ? `<br><span class="note">Declined: ${esc(a.decline_reason)}</span>` : ''}</td>
+    <td>${open ? `<b data-eta="${dueAt(a)}">${esc(p.eta_min)} min</b>` : '-'}</td>
+    <td><span class="pill ${esc(statusOf(a))}">${esc(statusOf(a))}</span></td><td><div class="actions">${actions(a)}</div></td></tr>`;
 }
 
 function tickEta() {
@@ -93,8 +129,11 @@ async function poll() {
     $('st-arrived').textContent = info.stats.arrived; $('st-total').textContent = info.stats.total;
     if (document.activeElement !== $('icu-toggle')) $('icu-toggle').checked = info.hospital.icu_available;
     $('icu-toggle').disabled = !info.hospital.emergency_facilities.includes('icu');
-    const alerts = r.alerts.slice().sort((a, b) => (a.session_status === 'arrived') - (b.session_status === 'arrived') || b.id - a.id);
-    $('h-rows').innerHTML = alerts.map((a) => row(a, !firstLoad && !seen.has(a.id))).join('');
+    // Open cases first: Critical, then Urgent, then by how soon they arrive. Closed cases sink.
+    const alerts = r.alerts.slice().sort((a, b) => isOpen(b) - isOpen(a) || (isOpen(a) ? rank(a) - rank(b) || dueAt(a) - dueAt(b) : b.id - a.id));
+    // Only redraw when something changed, so buttons and dialogs are not disturbed every 2 seconds.
+    const sig = JSON.stringify(alerts.map((a) => [a.id, a.status, a.session_status, a.payload.patient_summary, (a.family || []).map((f) => f.ack_note)]));
+    if (sig !== lastSig) { $('h-rows').innerHTML = alerts.map((a) => row(a, !firstLoad && !seen.has(a.id))).join(''); lastSig = sig; }
     for (const a of alerts) {
       if (!firstLoad && !seen.has(a.id)) {
         toast(`Incoming ${a.payload.urgency_level}: ${a.payload.patient_summary.split(',')[0]} (${a.payload.eta_min} min)`, a.payload.urgency_level === 'Critical' ? 'crit' : '');
@@ -112,12 +151,30 @@ async function poll() {
 $('h-rows').addEventListener('click', async (e) => {
   const b = e.target.closest('button[data-act]');
   if (!b) return;
+  const act = b.dataset.act;
+  if (act === 'decline') { target = b.dataset.id; $('decline-dlg').showModal(); return; }
+  if (act === 'link') { target = b.dataset.id; $('link-msg').textContent = ''; $('link-id').value = ''; $('link-dlg').showModal(); return; }
   b.disabled = true;
   try {
-    if (b.dataset.act === 'arrived') await api('POST', `/api/sessions/${b.dataset.session}/arrive`, {});
-    else await api('POST', `/api/alerts/${b.dataset.id}/status`, { status: b.dataset.act });
+    if (act === 'arrived') await api('POST', `/api/sessions/${b.dataset.session}/arrive`, {});
+    else await api('POST', `/api/alerts/${b.dataset.id}/status`, { status: act });
+    lastSig = '';
     await poll();
   } catch (err) { b.disabled = false; }
+});
+
+$('decline-cancel').addEventListener('click', () => $('decline-dlg').close());
+$('decline-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  try { await api('POST', `/api/alerts/${target}/decline`, { reason: $('decline-reason').value }); $('decline-dlg').close(); toast('Declined. The caller was told to choose another hospital.'); lastSig = ''; poll(); } catch (err) { /* banner */ }
+});
+$('link-cancel').addEventListener('click', () => $('link-dlg').close());
+$('link-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  try {
+    const r = await api('POST', `/api/alerts/${target}/link-patient`, { carelink_id: $('link-id').value }, { quiet: true });
+    $('link-dlg').close(); toast(`Linked ${r.patient.name}. ${r.guardians_alerted} guardian(s) alerted.`); lastSig = ''; poll();
+  } catch (err) { $('link-msg').textContent = err.message; }
 });
 
 $('icu-toggle').addEventListener('change', async () => {
