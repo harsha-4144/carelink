@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CARELINK AI: Guardian view</title>
+<link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="/">CARELINK AI</a>
+  <span class="amb">Ambulance: 108</span>
+  <a class="call" href="tel:112">Call 112</a>
+</header>
+<div id="error-banner" class="banner" role="alert" hidden></div>
+<main>
+  <h1>Guardian alert</h1>
+  <div id="g-empty" class="empty" hidden>No emergency selected. Open this page from the link shown after the alert (it ends with ?session=ID).</div>
+  <div id="g-content" hidden>
+    <div class="card"><div id="g-urgency"></div><h2 id="g-patient">Waiting for details…</h2><p id="g-patient-info" class="note"></p></div>
+    <div class="card">
+      <h3>Heading to</h3><p id="g-hospital">Not decided yet</p>
+      <p>Arrival in</p><div class="big" id="g-eta">--:--</div>
+      <p id="g-status" class="note"></p>
+      <p><a id="g-location" href="#" target="_blank" rel="noopener">Open patient location on map</a></p>
+    </div>
+    <div class="card"><h3>Timeline</h3><div id="g-timeline"></div></div>
+  </div>
+</main>
+<script src="/js/api.js"></script>
+<script>
+const sessionId = new URLSearchParams(location.search).get('session');
+let arrivalAt = null;
+let arrived = false;
+
+function render(s) {
+  $('g-urgency').innerHTML = badge(s.urgency_level);
+  $('g-patient').textContent = s.patient ? s.patient.name : 'Unidentified patient';
+  $('g-patient-info').textContent = s.patient ? 'Blood group ' + s.patient.blood_group + ' · Allergies: ' + s.patient.allergies + ' · Conditions: ' + s.patient.conditions : 'The patient has not been identified yet.';
+  $('g-hospital').textContent = s.hospital ? s.hospital.name : 'Not decided yet';
+  $('g-location').href = mapsLink(s.lat, s.lng);
+  $('g-timeline').innerHTML = renderTimeline(s.timeline);
+  arrived = s.status === 'arrived';
+  const a = s.alerts.find((x) => x.target_type === 'hospital');
+  arrivalAt = a && s.eta_min != null ? new Date(a.sent_at).getTime() + s.eta_min * 60000 : null;
+  $('g-status').textContent = arrived ? 'The patient has arrived at the hospital.' : (a ? 'Alert sent. Ambulance en route.' : 'Waiting for the bystander to send the alert…');
+  tick();
+}
+
+function tick() {
+  if (arrived) { $('g-eta').textContent = 'Arrived'; return; }
+  if (!arrivalAt) { $('g-eta').textContent = '--:--'; return; }
+  const left = Math.max(0, Math.round((arrivalAt - Date.now()) / 1000));
+  $('g-eta').textContent = String(Math.floor(left / 60)).padStart(2, '0') + ':' + String(left % 60).padStart(2, '0');
+}
+
+async function poll() {
+  try { render(await api('GET', '/api/sessions/' + encodeURIComponent(sessionId))); } catch (e) { /* banner shown; keep polling */ }
+}
+
+if (!sessionId) {
+  $('g-empty').hidden = false;
+} else {
+  $('g-content').hidden = false;
+  poll();
+  setInterval(poll, 2000);
+  setInterval(tick, 1000);
+}
+</script>
+</body>
+</html>

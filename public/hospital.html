@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CARELINK AI: Hospital dashboard</title>
+<link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="/">CARELINK AI</a>
+  <span class="amb">Ambulance: 108</span>
+  <a class="call" href="tel:112">Call 112</a>
+</header>
+<div id="error-banner" class="banner" role="alert" hidden></div>
+<main class="wide">
+  <h1 id="h-title">Hospital dashboard</h1>
+  <div id="h-pick" hidden><p>Choose a hospital:</p><div id="h-pick-list" class="row"></div></div>
+  <div id="h-content" hidden>
+    <p class="note">Incoming patients refresh every 2 seconds. Alerts are in-app and simulated.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Received</th><th>Urgency</th><th>Specialty</th><th>ETA</th><th>Patient summary</th></tr></thead>
+        <tbody id="h-rows"></tbody>
+      </table>
+      <div id="h-empty" class="empty">No incoming patients yet.</div>
+    </div>
+  </div>
+</main>
+<script src="/js/api.js"></script>
+<script>
+const hospitalId = new URLSearchParams(location.search).get('hospital');
+const seen = new Set();
+let firstLoad = true;
+
+function row(a, isNew) {
+  const p = a.payload;
+  return '<tr class="' + (isNew ? 'flash' : '') + '"><td>' + esc(fmtTime(a.sent_at)) + '</td><td>' + badge(p.urgency_level) + '</td><td>' + esc(p.needed_specialty) +
+    '</td><td>' + esc(p.eta_min) + ' min</td><td>' + esc(p.patient_summary) + '<br><span class="note">' + esc(p.urgency_reason) + ' · <a href="' + mapsLink(p.location.lat, p.location.lng) + '" target="_blank" rel="noopener">location</a></span></td></tr>';
+}
+
+async function poll() {
+  try {
+    const r = await api('GET', '/api/alerts?target_type=hospital&target_id=' + encodeURIComponent(hospitalId));
+    $('h-rows').innerHTML = r.alerts.map((a) => row(a, !firstLoad && !seen.has(a.id))).join('');
+    r.alerts.forEach((a) => seen.add(a.id));
+    $('h-empty').hidden = r.alerts.length > 0;
+    firstLoad = false;
+  } catch (e) { /* banner shown; keep polling */ }
+}
+
+async function init() {
+  if (!hospitalId) {
+    $('h-pick').hidden = false;
+    try {
+      const r = await api('GET', '/api/hospitals');
+      $('h-pick-list').innerHTML = r.hospitals.map((h) => '<a class="btn secondary" href="?hospital=' + h.id + '">' + esc(h.name) + '</a>').join('');
+    } catch (e) { /* banner shown */ }
+    return;
+  }
+  $('h-content').hidden = false;
+  try {
+    const r = await api('GET', '/api/hospitals');
+    const h = r.hospitals.find((x) => String(x.id) === hospitalId);
+    if (h) $('h-title').textContent = h.name + ': incoming patients';
+  } catch (e) { /* banner shown */ }
+  poll();
+  setInterval(poll, 2000);
+}
+init();
+</script>
+</body>
+</html>
