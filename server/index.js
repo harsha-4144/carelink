@@ -2,9 +2,20 @@ require('dotenv').config();
 const path = require('path');
 const express = require('express');
 const { getDb } = require('./db');
+const { attachUser } = require('./auth');
+const { limiter } = require('./ratelimit');
 
 const app = express();
+app.disable('x-powered-by');
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'same-origin');
+  next();
+});
 app.use(express.json({ limit: '1mb' }));
+app.use('/api', attachUser);
+// Limits ID guessing on the public break-glass lookup.
+app.use('/api/identify', limiter({ windowMs: 60 * 1000, max: 40, message: 'Too many lookups, wait a minute' }));
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
 function demoCenter() {
@@ -23,6 +34,10 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+app.use('/api', require('./routes/auth'));
+app.use('/api', require('./routes/me'));
+app.use('/api', require('./routes/guardian'));
+app.use('/api', require('./routes/hospital'));
 app.use('/api', require('./routes/emergency'));
 app.use('/api', require('./routes/identify'));
 app.use('/api', require('./routes/triage'));

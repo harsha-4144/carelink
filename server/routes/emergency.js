@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const express = require('express');
 const { getDb, logEvent, badRequest } = require('../db');
 
@@ -16,10 +17,12 @@ router.post('/emergency', (req, res, next) => {
     if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
       throw badRequest('lat and lng must be valid numbers');
     }
-    const id = getDb().prepare('INSERT INTO emergency_sessions (triggered_by, symptoms, lat, lng) VALUES (?,?,?,?)')
-      .run(triggered_by, symptoms, lat, lng).lastInsertRowid;
+    // access_key lets the bystander (who has no account) read and close their own session.
+    const access_key = crypto.randomBytes(8).toString('hex');
+    const id = getDb().prepare('INSERT INTO emergency_sessions (triggered_by, symptoms, lat, lng, access_key) VALUES (?,?,?,?,?)')
+      .run(triggered_by, symptoms, lat, lng, access_key).lastInsertRowid;
     logEvent(id, 'triggered');
-    res.json({ session_id: Number(id), status: 'triggered', lat, lng });
+    res.json({ session_id: Number(id), status: 'triggered', lat, lng, access_key });
   } catch (e) { next(e); }
 });
 

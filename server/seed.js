@@ -2,6 +2,9 @@ require('dotenv').config();
 const crypto = require('crypto');
 const { getDb } = require('./db');
 const { offset } = require('./services/geo');
+const { hashPassword } = require('./auth');
+
+const DEMO_PASSWORD = 'demo1234';
 
 const PATIENTS = [
   ['CL-1001', 'Asha Verma', 'B+', 'Penicillin', 'Type 2 diabetes', 'Metformin', 'Rohan Verma', 'Spouse'],
@@ -24,18 +27,23 @@ function seed(db = getDb()) {
   const lat = parseFloat(process.env.DEMO_CENTER_LAT || '17.7231');
   const lng = parseFloat(process.env.DEMO_CENTER_LNG || '83.3013');
   db.transaction(() => {
-    for (const t of ['session_events', 'alerts', 'emergency_sessions', 'guardians', 'patient_profiles', 'hospitals', 'users']) {
+    for (const t of ['auth_sessions', 'session_events', 'alerts', 'emergency_sessions', 'guardians', 'patient_profiles', 'hospitals', 'users']) {
       db.exec(`DELETE FROM ${t}`);
     }
     db.exec("DELETE FROM sqlite_sequence");
-    const addUser = db.prepare('INSERT INTO users (name, role, phone, carelink_id) VALUES (?,?,?,?)');
+    const pw = hashPassword(DEMO_PASSWORD);
+    const addUser = db.prepare('INSERT INTO users (name, role, phone, carelink_id, email, password_hash, hospital_id) VALUES (?,?,?,?,?,?,?)');
     const addProf = db.prepare('INSERT INTO patient_profiles (user_id, blood_group, allergies, conditions, medications, qr_token, consent_flags) VALUES (?,?,?,?,?,?,?)');
-    const addGuard = db.prepare('INSERT INTO guardians (patient_id, guardian_name, phone, relation, priority) VALUES (?,?,?,?,1)');
+    const addGuard = db.prepare('INSERT INTO guardians (patient_id, guardian_name, phone, relation, priority, email, user_id) VALUES (?,?,?,?,1,?,?)');
+    const first = (n) => n.split(' ')[0].toLowerCase();
     PATIENTS.forEach((p, i) => {
-      const id = addUser.run(p[1], 'patient', `+91-90000-0${1000 + i}`, p[0]).lastInsertRowid;
+      const id = addUser.run(p[1], 'patient', `+91-90000-0${1000 + i}`, p[0], `${first(p[1])}@demo.test`, pw, null).lastInsertRowid;
       addProf.run(id, p[2], p[3], p[4], p[5], crypto.randomBytes(8).toString('hex'),
         JSON.stringify({ medical: true, guardian_alerts: true, face: false }));
-      addGuard.run(id, p[6], `+91-90000-0${2000 + i}`, p[7]);
+      const gPhone = `+91-90000-0${2000 + i}`;
+      const gEmail = `${first(p[6])}@demo.test`;
+      const gUser = addUser.run(p[6], 'guardian', gPhone, null, gEmail, pw, null).lastInsertRowid;
+      addGuard.run(id, p[6], gPhone, p[7], gEmail, gUser);
     });
     const addHosp = db.prepare('INSERT INTO hospitals (name, lat, lng, specialties, emergency_facilities, icu_available, phone) VALUES (?,?,?,?,?,?,?)');
     const hospIds = HOSPITALS.map((h, i) => {
@@ -43,13 +51,13 @@ function seed(db = getDb()) {
       return addHosp.run(h[0], pos.lat, pos.lng, JSON.stringify(h[3]), JSON.stringify(h[4]),
         h[4].includes('icu') ? 1 : 0, `+91-80000-0${3000 + i}`).lastInsertRowid;
     });
-    addUser.run('Staff Priya (Riverside)', 'hospital_staff', null, null);
-    addUser.run('Staff Kiran (Heartline)', 'hospital_staff', null, null);
+    addUser.run('Priya Menon (Riverside)', 'hospital_staff', null, null, 'priya@demo.test', pw, hospIds[0]);
+    addUser.run('Kiran Das (Heartline)', 'hospital_staff', null, null, 'kiran@demo.test', pw, hospIds[1]);
     return hospIds;
   })();
 }
 
-module.exports = { seed };
+module.exports = { seed, DEMO_PASSWORD };
 
 if (require.main === module) {
   const db = getDb();

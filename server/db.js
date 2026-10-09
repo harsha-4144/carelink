@@ -37,11 +37,32 @@ CREATE TABLE IF NOT EXISTS alerts (
   target_id INTEGER NOT NULL, payload TEXT NOT NULL, sent_at TEXT DEFAULT CURRENT_TIMESTAMP,
   delivered INTEGER DEFAULT 1
 );
+CREATE TABLE IF NOT EXISTS auth_sessions (
+  token_hash TEXT PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id), expires_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS session_events (
   id INTEGER PRIMARY KEY AUTOINCREMENT, session_id INTEGER NOT NULL,
   step TEXT NOT NULL, at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 `;
+
+// Columns added after the original spec (accounts, guardian links, alert workflow). Safe on old DB files.
+function ensureColumn(d, table, col, ddl) {
+  if (!d.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === col)) {
+    d.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${ddl}`);
+  }
+}
+
+function migrate(d) {
+  ensureColumn(d, 'users', 'email', 'TEXT');
+  ensureColumn(d, 'users', 'password_hash', 'TEXT');
+  ensureColumn(d, 'users', 'hospital_id', 'INTEGER');
+  ensureColumn(d, 'guardians', 'user_id', 'INTEGER');
+  ensureColumn(d, 'guardians', 'email', 'TEXT');
+  ensureColumn(d, 'alerts', 'status', "TEXT DEFAULT 'new'");
+  ensureColumn(d, 'emergency_sessions', 'access_key', 'TEXT');
+  d.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email)');
+}
 
 let db = null;
 
@@ -51,6 +72,7 @@ function openDb(file) {
   const d = new Database(p);
   d.pragma('journal_mode = WAL');
   d.exec(SCHEMA);
+  migrate(d);
   return d;
 }
 
@@ -84,11 +106,13 @@ function loadSession(id) {
   return s;
 }
 
-function badRequest(message) {
+function httpError(status, message) {
   const e = new Error(message);
-  e.status = 400;
+  e.status = status;
   return e;
 }
+
+const badRequest = (message) => httpError(400, message);
 
 // SQLite timestamps are UTC without a zone marker; make them ISO so browsers parse them correctly.
 function iso(ts) {
@@ -105,4 +129,4 @@ function patientSummary(patientId) {
   return p;
 }
 
-module.exports = { openDb, getDb, logEvent, advanceStatus, loadSession, badRequest, iso, patientSummary };
+module.exports = { openDb, getDb, logEvent, advanceStatus, loadSession, badRequest, httpError, iso, patientSummary };

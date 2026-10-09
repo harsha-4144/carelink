@@ -17,7 +17,8 @@ const parse = (v) => (Array.isArray(v) ? v : JSON.parse(v || '[]'));
 
 function terms(h, ctx, etaMin, trafficLevel) {
   const specialties = parse(h.specialties);
-  const facilities = parse(h.emergency_facilities);
+  // Staff can mark the ICU full; then it no longer counts.
+  const facilities = parse(h.emergency_facilities).filter((f) => f !== 'icu' || h.icu_available !== 0);
   const need = ctx.needed_specialty || 'general';
   const S = specialties.includes(need) ? 1 : specialties.includes('general') ? 0.5 : 0;
   const rel = RELEVANT_FACILITY[need];
