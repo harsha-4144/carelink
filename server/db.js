@@ -63,4 +63,46 @@ function logEvent(sessionId, step) {
   getDb().prepare('INSERT INTO session_events (session_id, step) VALUES (?, ?)').run(sessionId, step);
 }
 
-module.exports = { openDb, getDb, logEvent };
+const STATUS_ORDER = ['triggered', 'assessed', 'matched', 'alerted', 'arrived'];
+
+// Move a session forward only; never regress (e.g. re-running match after alert).
+function advanceStatus(sessionId, status) {
+  const row = getDb().prepare('SELECT status FROM emergency_sessions WHERE id = ?').get(sessionId);
+  if (row && STATUS_ORDER.indexOf(status) > STATUS_ORDER.indexOf(row.status)) {
+    getDb().prepare('UPDATE emergency_sessions SET status = ? WHERE id = ?').run(status, sessionId);
+  }
+}
+
+// Throws a 404 error (handled by express error middleware) when the session is unknown.
+function loadSession(id) {
+  const s = getDb().prepare('SELECT * FROM emergency_sessions WHERE id = ?').get(Number(id));
+  if (!s) {
+    const e = new Error('Session not found');
+    e.status = 404;
+    throw e;
+  }
+  return s;
+}
+
+function badRequest(message) {
+  const e = new Error(message);
+  e.status = 400;
+  return e;
+}
+
+// SQLite timestamps are UTC without a zone marker; make them ISO so browsers parse them correctly.
+function iso(ts) {
+  return ts ? ts.replace(' ', 'T') + 'Z' : ts;
+}
+
+// Emergency summary only: never includes qr_token or face_embedding.
+function patientSummary(patientId) {
+  const d = getDb();
+  const p = d.prepare(`SELECT u.id, u.name, u.carelink_id, pp.blood_group, pp.allergies, pp.conditions, pp.medications
+    FROM users u JOIN patient_profiles pp ON pp.user_id = u.id WHERE u.id = ?`).get(patientId);
+  if (!p) return null;
+  p.guardians = d.prepare('SELECT id, guardian_name, phone, relation FROM guardians WHERE patient_id = ? ORDER BY priority, id').all(patientId);
+  return p;
+}
+
+module.exports = { openDb, getDb, logEvent, advanceStatus, loadSession, badRequest, iso, patientSummary };

@@ -23,7 +23,15 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// ROUTES-MOUNT
+app.use('/api', require('./routes/emergency'));
+app.use('/api', require('./routes/identify'));
+app.use('/api', require('./routes/triage'));
+app.use('/api', require('./routes/hospitals'));
+app.use('/api', require('./routes/route'));
+app.use('/api', require('./routes/alert'));
+app.use('/api', require('./routes/alerts'));
+app.use('/api', require('./routes/sessions'));
+app.use('/api', require('./routes/patients'));
 
 app.use('/api', (req, res) => res.status(404).json({ message: 'Unknown API route' }));
 
