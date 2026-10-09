@@ -64,6 +64,16 @@ Reset between runs with `npm run seed` (restart not required).
 - **Maps/QR libraries** load from cdnjs (Leaflet 1.9.4) and unpkg (html5-qrcode 2.3.8) with visible fallbacks. QR scanning needs a camera and HTTPS or localhost.
 - `GET /api/health` also reports `demo_center`, `mock_mode` and `face_enabled`.
 
+## Face recognition (optional stretch, off by default)
+
+`npm run models` downloads face-api.js and the model weights into `public/models` (gitignored; weights come from the
+vladmandic/face-api GitHub repo because the original repo's weight paths no longer resolve). Then set `ENABLE_FACE=true`.
+The browser computes a 128-number descriptor and sends only that; the server compares Euclidean distance with a 0.6
+threshold. Registration stores a descriptor only when the patient ticks the face consent box. With `ENABLE_FACE=false`
+(default) `/api/identify` with method `face` returns `{found:false, reason:"face_disabled"}`.
+The server side is covered by `test/face.test.js`; the in-browser camera/model code could not be exercised in the
+headless build environment, so treat it as untested on a real camera.
+
 ## Known limitations
 
 - **Traffic is simulated** (multiplier by hour of day), labelled as such in the UI. No free live-traffic API.

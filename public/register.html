@@ -33,6 +33,12 @@
     <label class="check"><input type="checkbox" id="consent_medical" required> I consent to storing my medical information so responders can see it in an emergency. *</label>
     <label class="check"><input type="checkbox" id="consent_guardian" required> I consent to my guardian being alerted in an emergency. *</label>
     <label class="check"><input type="checkbox" id="consent_face"> (Optional) I consent to face recognition for identification. Only used if the server has it enabled.</label>
+    <div id="face-capture" hidden>
+      <p class="note">Face recognition is enabled on this server. Tick the optional consent above, then capture a face.</p>
+      <video id="face-video-reg" autoplay playsinline muted style="width:100%;max-width:320px;border-radius:10px" hidden></video>
+      <div class="row"><button type="button" id="face-capture-btn" class="secondary">Capture face</button></div>
+      <p id="face-capture-msg" class="note" aria-live="polite"></p>
+    </div>
     <div class="row"><button type="submit" id="reg-submit">Register and create QR</button></div>
   </form>
   <div id="reg-result" class="qr-card" hidden>
@@ -44,7 +50,21 @@
   </div>
 </main>
 <script src="/js/api.js"></script>
+<script src="/js/face.js"></script>
 <script>
+let faceDescriptor = null;
+api('GET', '/api/health').then((h) => { if (h.face_enabled) $('face-capture').hidden = false; }).catch(() => {});
+$('face-capture-btn').addEventListener('click', async () => {
+  const msg = $('face-capture-msg');
+  try {
+    msg.textContent = 'Loading…';
+    await Face.ensure();
+    if (!$('face-video-reg').srcObject) { await Face.startCamera($('face-video-reg')); $('face-video-reg').hidden = false; msg.textContent = 'Camera on. Tap Capture face again.'; return; }
+    faceDescriptor = await Face.descriptor($('face-video-reg'));
+    msg.textContent = faceDescriptor ? 'Face captured. It is stored only if you gave face consent.' : 'No face detected. Try again.';
+    if (faceDescriptor) Face.stop();
+  } catch (e) { msg.textContent = 'Face capture unavailable (' + e.message + ').'; }
+});
 $('reg-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const btn = $('reg-submit');
@@ -55,6 +75,7 @@ $('reg-form').addEventListener('submit', async (e) => {
       name: v('name'), phone: v('phone'), blood_group: $('blood_group').value, allergies: v('allergies'),
       conditions: v('conditions'), medications: v('medications'),
       guardian_name: v('guardian_name'), guardian_phone: v('guardian_phone'), guardian_relation: v('guardian_relation'),
+      face_descriptor: faceDescriptor,
       consent: { medical: $('consent_medical').checked, guardian_alerts: $('consent_guardian').checked, face: $('consent_face').checked },
     });
     $('r-name').textContent = v('name');

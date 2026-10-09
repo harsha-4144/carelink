@@ -122,6 +122,7 @@ $('skip-identify').addEventListener('click', () => { QrScan.stop(); state.patien
 function initFace() {
   if (typeof initFaceTab === 'function') initFaceTab();
 }
+// (face.js defines initFaceTab; the face tab only activates when the server reports face_enabled)
 
 // ---------- 3. Assess ----------
 document.querySelectorAll('.chip').forEach((c) => c.addEventListener('click', () => {

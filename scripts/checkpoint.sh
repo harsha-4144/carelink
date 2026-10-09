@@ -141,7 +141,7 @@ phase6() {
   S=$(post /api/emergency '{"triggered_by":"manual"}'); SID=$(echo "$S" | node -e "console.log(JSON.parse(require('fs').readFileSync(0,'utf8')).session_id)")
   R=$(post /api/identify "{\"session_id\":$SID,\"method\":\"face\",\"value\":[0.1]}")
   echo "$R" | jq_ "d.found===false && d.reason==='face_disabled'" && pass "face disabled -> face_disabled" || fail "face disabled" "$R"
-  check "face descriptor stored only with face consent" node test/face-consent-check.js
+  check "face descriptor stored only with face consent" node --test test/face.test.js
 }
 
 # ---------- Run ----------
