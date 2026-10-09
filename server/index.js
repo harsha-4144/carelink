@@ -58,7 +58,12 @@ app.use((err, req, res, next) => {
 });
 
 if (require.main === module) {
-  getDb();
+  // A fresh clone has an empty database: seed the demo data on first start so the demo just works.
+  const db = getDb();
+  if (db.prepare('SELECT COUNT(*) c FROM hospitals').get().c === 0) {
+    require('./seed').seed(db);
+    console.log('Empty database: seeded demo data (5 patients, 6 hospitals, demo accounts).');
+  }
   const port = process.env.PORT || 3000;
   app.listen(port, () => console.log(`CARELINK AI running on http://localhost:${port}`));
 }
